@@ -41,8 +41,8 @@ static GSList *cached_info_list;
 /* Statistics */
 static int unwind_info_size;
 
-#define unwind_lock() mono_mutex_lock (&unwind_mutex)
-#define unwind_unlock() mono_mutex_unlock (&unwind_mutex)
+#define unwind_lock() mono_os_mutex_lock (&unwind_mutex)
+#define unwind_unlock() mono_os_mutex_unlock (&unwind_mutex)
 
 #ifdef TARGET_AMD64
 static int map_hw_reg_to_dwarf_reg [] = { 0, 2, 1, 3, 7, 6, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
@@ -361,7 +361,7 @@ mono_unwind_ops_encode_full (GSList *unwind_ops, guint32 *out_len, gboolean enab
 	for (; l; l = l->next) {
 		int reg;
 
-		op = l->data;
+		op = (MonoUnwindOp *)l->data;
 
 		/* Convert the register from the hw encoding to the dwarf encoding */
 		reg = mono_hw_reg_to_dwarf_reg (op->reg);
@@ -375,13 +375,15 @@ mono_unwind_ops_encode_full (GSList *unwind_ops, guint32 *out_len, gboolean enab
 		while (op->when > loc) {
 			if (op->when - loc > 65536) {
 				*p ++ = DW_CFA_advance_loc4;
-				*(guint32*)p = (guint32)(op->when - loc);
+				guint32 v = (guint32)(op->when - loc);
+				memcpy (p, &v, 4);
 				g_assert (read32 (p) == (guint32)(op->when - loc));
 				p += 4;
 				loc = op->when;
 			} else if (op->when - loc > 256) {
 				*p ++ = DW_CFA_advance_loc2;
-				*(guint16*)p = (guint16)(op->when - loc);
+				guint16 v = (guint16)(op->when - loc);
+				memcpy (p, &v, 2);
 				g_assert (read16 (p) == (guint32)(op->when - loc));
 				p += 2;
 				loc = op->when;
@@ -446,7 +448,7 @@ mono_unwind_ops_encode_full (GSList *unwind_ops, guint32 *out_len, gboolean enab
 	
 	g_assert (p - buf < 4096);
 	*out_len = p - buf;
-	res = g_malloc (p - buf);
+	res = (guint8 *)g_malloc (p - buf);
 	memcpy (res, buf, p - buf);
 	return res;
 }
@@ -632,7 +634,7 @@ mono_unwind_frame (guint8 *unwind_info, guint32 unwind_info_len,
 void
 mono_unwind_init (void)
 {
-	mono_mutex_init_recursive (&unwind_mutex);
+	mono_os_mutex_init_recursive (&unwind_mutex);
 
 	mono_counters_register ("Unwind info size", MONO_COUNTER_JIT | MONO_COUNTER_INT, &unwind_info_size);
 }
@@ -642,7 +644,7 @@ mono_unwind_cleanup (void)
 {
 	int i;
 
-	mono_mutex_destroy (&unwind_mutex);
+	mono_os_mutex_destroy (&unwind_mutex);
 
 	if (!cached_info)
 		return;
@@ -652,8 +654,12 @@ mono_unwind_cleanup (void)
 
 		g_free (cached);
 	}
-
 	g_free (cached_info);
+
+	for (GSList *cursor = cached_info_list; cursor != NULL; cursor = cursor->next)
+		g_free (cursor->data);
+
+	g_slist_free (cached_info_list);
 }
 
 /*
@@ -688,7 +694,7 @@ mono_cache_unwind_info (guint8 *unwind_info, guint32 unwind_info_len)
 		}
 	}
 
-	info = g_malloc (sizeof (MonoUnwindInfo) + unwind_info_len);
+	info = (MonoUnwindInfo *)g_malloc (sizeof (MonoUnwindInfo) + unwind_info_len);
 	info->len = unwind_info_len;
 	memcpy (&info->info, unwind_info, unwind_info_len);
 
@@ -708,9 +714,9 @@ mono_cache_unwind_info (guint8 *unwind_info, guint32 unwind_info_len)
 
 		mono_memory_barrier ();
 
-		cached_info = new_table;
-
 		cached_info_list = g_slist_prepend (cached_info_list, cached_info);
+
+		cached_info = new_table;
 
 		cached_info_size *= 2;
 	}
@@ -881,11 +887,11 @@ decode_lsda (guint8 *lsda, guint8 *code, MonoJitExceptionInfo **ex_info, guint32
 	p = (guint8*)ALIGN_TO ((mgreg_t)p, 4);
 
 	if (ex_info) {
-		*ex_info = g_malloc0 (ncall_sites * sizeof (MonoJitExceptionInfo));
+		*ex_info = (MonoJitExceptionInfo *)g_malloc0 (ncall_sites * sizeof (MonoJitExceptionInfo));
 		*ex_info_len = ncall_sites;
 	}
 	if (type_info)
-		*type_info = g_malloc0 (ncall_sites * sizeof (gpointer));
+		*type_info = (gpointer *)g_malloc0 (ncall_sites * sizeof (gpointer));
 
 	for (i = 0; i < ncall_sites; ++i) {
 		int block_start_offset, block_size, landing_pad;
@@ -1058,7 +1064,7 @@ mono_unwind_decode_fde (guint8 *fde, guint32 *out_len, guint32 *code_len, MonoJi
 	g_assert (return_reg == DWARF_PC_REG);
 
 	buf_len = (cie + cie_len + 4 - cie_cfi) + (fde + fde_len + 4 - fde_cfi);
-	buf = g_malloc0 (buf_len);
+	buf = (guint8 *)g_malloc0 (buf_len);
 
 	i = 0;
 	p = cie_cfi;
@@ -1084,7 +1090,7 @@ mono_unwind_decode_fde (guint8 *fde, guint32 *out_len, guint32 *code_len, MonoJi
 
 	*out_len = i;
 
-	return g_realloc (buf, i);
+	return (guint8 *)g_realloc (buf, i);
 }
 
 /*
@@ -1158,7 +1164,7 @@ mono_unwind_decode_llvm_mono_fde (guint8 *fde, int fde_len, guint8 *cie, guint8 
 	cie_cfi_len = p - cie_cfi;
 	fde_cfi_len = (fde + fde_len - fde_cfi);
 
-	buf = g_malloc0 (cie_cfi_len + fde_cfi_len);
+	buf = (guint8 *)g_malloc0 (cie_cfi_len + fde_cfi_len);
 	memcpy (buf, cie_cfi, cie_cfi_len);
 	memcpy (buf + cie_cfi_len, fde_cfi, fde_cfi_len);
 

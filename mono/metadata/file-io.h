@@ -7,6 +7,7 @@
  *
  * (C) 2001 Ximian, Inc.
  * Copyright 2012 Xamarin Inc (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifndef _MONO_METADATA_FILEIO_H_
@@ -247,11 +248,15 @@ ves_icall_System_IO_MonoIO_ReplaceFile (MonoString *sourceFileName, MonoString *
 					MonoString *destinationBackupFileName, MonoBoolean ignoreMetadataErrors,
 					gint32 *error);
 
+MONO_RT_EXTERNAL_ONLY
 extern gint64
 mono_filesize_from_path (MonoString *path);
 
 extern gint64
 mono_filesize_from_fd (int fd);
+
+void
+ves_icall_System_IO_MonoIO_DumpHandles (void);
 
 G_END_DECLS
 

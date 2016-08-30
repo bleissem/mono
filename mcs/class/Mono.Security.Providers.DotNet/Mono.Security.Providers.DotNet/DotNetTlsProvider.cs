@@ -40,15 +40,29 @@ namespace Mono.Security.Providers.DotNet
 	 */
 	public class DotNetTlsProvider : MonoTlsProvider
 	{
+		static readonly Guid id = new Guid ("3a7b3a26-0dbd-4572-a5b8-fdce766bf0dd");
+
+		public override Guid ID {
+			get { return id; }
+		}
+
+		public override string Name {
+			get { return "dotnet"; }
+		}
+
 		public override bool SupportsSslStream {
 			get { return true; }
+		}
+
+		public override bool SupportsConnectionInfo {
+			get { return false; }
 		}
 
 		public override bool SupportsMonoExtensions {
 			get { return false; }
 		}
 
-		public override bool SupportsTlsContext {
+		internal override bool SupportsTlsContext {
 			get { return false; }
 		}
 
@@ -56,7 +70,7 @@ namespace Mono.Security.Providers.DotNet
 			get { return (SslProtocols)ServicePointManager.SecurityProtocol; }
 		}
 
-		public override MonoSslStream CreateSslStream (
+		public override IMonoSslStream CreateSslStream (
 			Stream innerStream, bool leaveInnerStreamOpen,
 			MonoTlsSettings settings = null)
 		{
@@ -71,10 +85,10 @@ namespace Mono.Security.Providers.DotNet
 				selection_callback = ConvertCallback (settings.ClientCertificateSelectionCallback);
 			}
 
-			return new DotNetSslStreamImpl (innerStream, leaveInnerStreamOpen, validation_callback, selection_callback);
+			return new DotNetSslStreamImpl (innerStream, leaveInnerStreamOpen, this, validation_callback, selection_callback);
 		}
 
-		public override IMonoTlsContext CreateTlsContext (
+		internal override IMonoTlsContext CreateTlsContext (
 			string hostname, bool serverMode, TlsProtocols protocolFlags,
 			X509Certificate serverCertificate, X509CertificateCollection clientCertificates,
 			bool remoteCertRequired, MonoEncryptionPolicy encryptionPolicy,

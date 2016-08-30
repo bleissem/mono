@@ -31,19 +31,11 @@
 #if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 #endif
-#if MONO_X509_ALIAS
-extern alias PrebuiltSystem;
-#endif
 
 #if MONO_SECURITY_ALIAS
 using MSI = MonoSecurity::Mono.Security.Interface;
 #else
 using MSI = Mono.Security.Interface;
-#endif
-#if MONO_X509_ALIAS
-using XX509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-#else
-using XX509CertificateCollection = System.Security.Cryptography.X509Certificates.X509CertificateCollection;
 #endif
 
 using System.IO;
@@ -74,7 +66,7 @@ namespace System.Net {
 		int reuses;
 		bool context_bound;
 		bool secure;
-		X509Certificate2 cert;
+		X509Certificate cert;
 		int s_timeout = 90000; // 90k ms for first request, 15k ms from then on
 		Timer timer;
 		IPEndPoint local_ep;
@@ -83,7 +75,7 @@ namespace System.Net {
 		X509Certificate2 client_cert;
 		IMonoSslStream ssl_stream;
 
-		public HttpConnection (Socket sock, EndPointListener epl, bool secure, X509Certificate2 cert)
+		public HttpConnection (Socket sock, EndPointListener epl, bool secure, X509Certificate cert)
 		{
 			this.sock = sock;
 			this.epl = epl;
@@ -209,8 +201,11 @@ namespace System.Net {
 			// TODO: can we get this stream before reading the input?
 			if (o_stream == null) {
 				HttpListener listener = context.Listener;
-				bool ign = (listener == null) ? true : listener.IgnoreWriteExceptions;
-				o_stream = new ResponseStream (stream, context.Response, ign);
+				
+				if(listener == null)
+					return new ResponseStream (stream, context.Response, true);
+
+				o_stream = new ResponseStream (stream, context.Response, listener.IgnoreWriteExceptions);
 			}
 			return o_stream;
 		}
@@ -394,7 +389,7 @@ namespace System.Net {
 				HttpListenerResponse response = context.Response;
 				response.StatusCode = status;
 				response.ContentType = "text/html";
-				string description = HttpListenerResponse.GetStatusDescription (status);
+				string description = HttpListenerResponseHelper.GetStatusDescription (status);
 				string str;
 				if (msg != null)
 					str = String.Format ("<h1>{0} ({1})</h1>", description, msg);

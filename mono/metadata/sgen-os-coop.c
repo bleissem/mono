@@ -5,21 +5,11 @@
  *	João Matos (joao.matos@xamarin.com)
  * Copyright (C) 2015 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "config.h"
+
 #ifdef HAVE_SGEN_GC
 
 
@@ -28,7 +18,7 @@
 #include "sgen/sgen-archdep.h"
 #include "sgen/sgen-protocol.h"
 #include "metadata/object-internals.h"
-#include "metadata/gc-internal.h"
+#include "metadata/gc-internals.h"
 
 
 #if defined(USE_COOP_GC)
@@ -76,6 +66,10 @@ mono_gc_get_restart_signal (void)
 {
 	return -1;
 }
-
-#endif
+#else
+	#ifdef _MSC_VER
+		// Quiet Visual Studio linker warning, LNK4221, in cases when this source file intentional ends up empty.
+		void __mono_win32_sgen_os_coop_quiet_lnk4221(void) {}
+	#endif
+#endif /* USE_COOP_GC */
 #endif

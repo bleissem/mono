@@ -1035,7 +1035,7 @@ namespace Microsoft.Build.BuildEngine {
 			evaluatedProperties.AddProperty (new BuildProperty ("OS", OS, PropertyType.Environment));
 #if XBUILD_12
 			// see http://msdn.microsoft.com/en-us/library/vstudio/hh162058(v=vs.120).aspx
-			if (effective_tools_version == "12.0") {
+			if (effective_tools_version == "12.0" || effective_tools_version == "14.0") {
 				evaluatedProperties.AddProperty (new BuildProperty ("MSBuildToolsPath32", toolsPath, PropertyType.Reserved));
 
 				var frameworkToolsPath = ToolLocationHelper.GetPathToDotNetFramework (TargetDotNetFrameworkVersion.Version451);
@@ -1077,6 +1077,11 @@ namespace Microsoft.Build.BuildEngine {
 			if (!String.IsNullOrEmpty (ToolsVersion))
 				return ToolsVersion;
 
+#if XBUILD_14
+			return "14.0";
+#elif XBUILD_12
+			return "12.0";
+#else
 			if (!HasToolsVersionAttribute)
 				return parentEngine.DefaultToolsVersion;
 
@@ -1088,6 +1093,7 @@ namespace Microsoft.Build.BuildEngine {
 			}
 
 			return DefaultToolsVersion;
+#endif
 		}
 		
 		void AddProjectExtensions (XmlElement xmlElement)

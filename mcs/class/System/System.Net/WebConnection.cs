@@ -86,7 +86,7 @@ namespace System.Net
 		static object classLock = new object ();
 		MonoTlsStream tlsStream;
 
-#if MONOTOUCH
+#if MONOTOUCH && !MONOTOUCH_TV && !MONOTOUCH_WATCH
 		[System.Runtime.InteropServices.DllImport ("__Internal")]
 		static extern void xamarin_start_wwan (string uri);
 #endif
@@ -152,7 +152,7 @@ namespace System.Net
 				IPHostEntry hostEntry = sPoint.HostEntry;
 
 				if (hostEntry == null) {
-#if MONOTOUCH
+#if MONOTOUCH && !MONOTOUCH_TV && !MONOTOUCH_WATCH
 					xamarin_start_wwan (sPoint.Address.ToString ());
 					hostEntry = sPoint.HostEntry;
 					if (hostEntry == null) {
@@ -160,7 +160,7 @@ namespace System.Net
 						status = sPoint.UsesProxy ? WebExceptionStatus.ProxyNameResolutionFailure :
 									    WebExceptionStatus.NameResolutionFailure;
 						return;
-#if MONOTOUCH
+#if MONOTOUCH && !MONOTOUCH_TV && !MONOTOUCH_WATCH
 					}
 #endif
 				}
@@ -261,7 +261,7 @@ namespace System.Net
 					var auth = AuthenticationManager.Authenticate (challenge [i], connect_request, creds);
 					if (auth == null)
 						continue;
-					ntlm = (auth.Module.AuthenticationType == "NTLM");
+					ntlm = (auth.ModuleAuthenticationType == "NTLM");
 					sb.Append ("\r\nProxy-Authorization: ");
 					sb.Append (auth.Message);
 					break;
@@ -292,7 +292,7 @@ namespace System.Net
 				}
 
 				Data.StatusCode = status;
-				Data.Challenge = result.GetValues_internal ("Proxy-Authenticate", false);
+				Data.Challenge = result.GetValues ("Proxy-Authentic");
 				return false;
 			} else if (status != 200) {
 				string msg = String.Format ("The remote server returned a {0} status code.", status);
@@ -419,6 +419,7 @@ namespace System.Net
 					status = tlsStream.ExceptionStatus;
 				else if (!request.Aborted)
 					status = WebExceptionStatus.ConnectFailure;
+				connect_exception = ex;
 				return false;
 			}
 
@@ -658,8 +659,23 @@ namespace System.Net
 					if (!finished)
 						return 0;
 
-					foreach (string s in headers)
-						data.Headers.SetInternal (s);
+					// .NET uses ParseHeaders or ParseHeadersStrict which is much better
+					foreach (string s in headers) {
+
+						int pos_s = s.IndexOf (':');
+						if (pos_s == -1)
+							throw new ArgumentException ("no colon found", "header");
+
+						var header = s.Substring (0, pos_s);
+						var value = s.Substring (pos_s + 1).Trim ();
+
+						var h = data.Headers;
+						if (h.AllowMultiValues (header)) {
+							h.AddInternal (header, value);
+						} else  {
+							h.SetInternal (header, value);
+						}
+					}
 
 					if (data.StatusCode == (int) HttpStatusCode.Continue) {
 						sPoint.SendContinue = true;
@@ -720,6 +736,11 @@ namespace System.Net
 					goto retry;
 
 				Exception cnc_exc = connect_exception;
+				if (cnc_exc == null && (Data.StatusCode == 401 || Data.StatusCode == 407)) {
+					st = WebExceptionStatus.ProtocolError;
+					cnc_exc = new WebException (Data.StatusCode == 407 ? "(407) Proxy Authentication Required" : "(401) Unauthorized" , st);
+				}
+			
 				connect_exception = null;
 				request.SetWriteStreamError (st, cnc_exc);
 				Close (true);
@@ -880,6 +901,8 @@ namespace System.Net
 		{
 			Stream s = null;
 			lock (this) {
+				if (request.Aborted)
+					throw new WebException ("Request aborted", WebExceptionStatus.RequestCanceled);
 				if (Data.request != request)
 					throw new ObjectDisposedException (typeof (NetworkStream).FullName);
 				if (nstream == null)
@@ -992,9 +1015,6 @@ namespace System.Net
 
 		internal bool EndWrite (HttpWebRequest request, bool throwOnError, IAsyncResult result)
 		{
-			if (request.FinishedReading)
-				return true;
-
 			Stream s = null;
 			lock (this) {
 				if (status == WebExceptionStatus.RequestCanceled)

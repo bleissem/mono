@@ -191,6 +191,14 @@ public class Tests {
 	[DllImport ("libtest", EntryPoint="mono_test_marshal_delegate_ref_delegate")]
 	public static extern int mono_test_marshal_delegate_ref_delegate (DelegateByrefDelegate del);
 
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_virtual_delegate")]
+	public static extern int mono_test_marshal_virtual_delegate (VirtualDelegate del);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_icall_delegate")]
+	public static extern int mono_test_marshal_icall_delegate (IcallDelegate del);
+
+	public delegate string IcallDelegate (IntPtr p);
+
 	public delegate int TestDelegate (int a, ref SimpleStruct ss, int b);
 
 	public delegate SimpleStruct SimpleDelegate2 (SimpleStruct ss);
@@ -214,6 +222,8 @@ public class Tests {
 	public delegate return_int_delegate ReturnDelegateDelegate ();
 
 	public delegate int DelegateByrefDelegate (ref return_int_delegate del);
+
+	public delegate int VirtualDelegate (int i);
 
 	public static int Main () {
 		return TestDriver.RunTests (typeof (Tests));
@@ -1095,6 +1105,49 @@ public class Tests {
 		return res;
 	}
 
+	class Worker {
+		volatile bool stop = false;
+		public void Stop () {
+			stop = true;
+		}
+
+		public void Work () {
+			while (!stop) {
+				for (int i = 0; i < 100; i++) {
+					var a = new double[80000];
+					Thread.Sleep (0);
+				}
+				GC.Collect ();
+			}
+		}
+	}
+
+	public static int test_43_thread_attach_detach_contested () {
+		// Test plan: we want to create a race between the GC
+		// and native threads detaching.  When a native thread
+		// calls a managed delegate, it's attached to the
+		// runtime by the wrapper.  It is detached when the
+		// thread is destroyed and the TLS key destructor for
+		// MonoThreadInfo runs.  That destructor wants to take
+		// the GC lock.  So we create a lot of native threads
+		// while at the same time running a worker that
+		// allocates garbage and invokes the collector.
+		var w = new Worker ();
+		Thread t = new Thread(new ThreadStart (w.Work));
+		t.Start ();
+
+		for (int count = 0; count < 500; count++) {
+			int res = mono_test_marshal_thread_attach (delegate (int i) {
+					Thread.Sleep (0);
+					return i + 1;
+				});
+		}
+		Thread.Sleep (1000);
+		w.Stop ();
+		t.Join ();
+		return 43; 
+
+	}
 	/*
 	 * Appdomain save/restore
 	 */
@@ -1134,4 +1187,32 @@ public class Tests {
 			return 0;
 		}
     }
+
+	class Base {
+		public VirtualDelegate get_del () {
+			return delegate_test;
+		}
+
+		public virtual int delegate_test (int i) {
+			return i;
+		}
+	}
+
+	class Derived : Base {
+		public override int delegate_test (int i) {
+			return i + 1;
+		}
+	}
+
+	public static int test_43_virtual () {
+		Base b = new Derived ();
+
+		return mono_test_marshal_virtual_delegate (b.get_del ());
+	}
+
+	public static int test_0_icall_delegate () {
+		var m = typeof (Marshal).GetMethod ("PtrToStringAnsi", new Type[] { typeof (IntPtr) });
+
+		return mono_test_marshal_icall_delegate ((IcallDelegate)Delegate.CreateDelegate (typeof (IcallDelegate), m));
+	}
 }

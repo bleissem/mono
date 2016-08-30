@@ -7,7 +7,7 @@
  * (C) 2015 Xamarin
  */
 
-#include <mono/utils/networking.h>
+#include <config.h>
 #include <glib.h>
 
 #ifdef HAVE_NETDB_H
@@ -25,6 +25,9 @@
 #ifdef HAVE_GETIFADDRS
 #include <ifaddrs.h>
 #endif
+
+#include <mono/utils/networking.h>
+#include <mono/utils/mono-threads-coop.h>
 
 static void*
 get_address_from_sockaddr (struct sockaddr *sa)
@@ -47,6 +50,7 @@ mono_get_address_info (const char *hostname, int port, int flags, MonoAddressInf
 	struct addrinfo hints, *res = NULL, *info;
 	MonoAddressEntry *cur = NULL, *prev = NULL;
 	MonoAddressInfo *addr_info;
+	int ret;
 
 	memset (&hints, 0, sizeof (struct addrinfo));
 	*result = NULL;
@@ -68,7 +72,12 @@ mono_get_address_info (const char *hostname, int port, int flags, MonoAddressInf
 		hints.ai_flags = AI_ADDRCONFIG;
 #endif
 	sprintf (service_name, "%d", port);
-    if (getaddrinfo (hostname, service_name, &hints, &info))
+
+	MONO_ENTER_GC_SAFE;
+	ret = getaddrinfo (hostname, service_name, &hints, &info);
+	MONO_EXIT_GC_SAFE;
+
+	if (ret)
 		return 1; /* FIXME propagate the error */
 
 	res = info;
@@ -182,7 +191,7 @@ mono_get_local_interfaces (int family, int *interface_count)
 
 	memset (&ifc, 0, sizeof (ifc));
 	ifc.ifc_len = IFCONF_BUFF_SIZE;
-	ifc.ifc_buf = g_malloc (IFCONF_BUFF_SIZE); /* We can't have such huge buffers on the stack. */
+	ifc.ifc_buf = (char *)g_malloc (IFCONF_BUFF_SIZE); /* We can't have such huge buffers on the stack. */
 	if (ioctl (fd, SIOCGIFCONF, &ifc) < 0)
 		goto done;
 
@@ -219,7 +228,8 @@ mono_get_local_interfaces (int family, int *interface_count)
 		++if_count;
 	}
 
-	result_ptr = result = g_malloc (if_count * mono_address_size_for_family (family));
+	result = (char *)g_malloc (if_count * mono_address_size_for_family (family));
+	result_ptr = (char *)result;
 	FOREACH_IFR (ifr, ifc) {
 		if (ifr->ifr_name [0] == '\0')
 			continue;

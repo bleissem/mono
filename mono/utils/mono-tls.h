@@ -6,6 +6,7 @@
  *
  * Copyright 2011 Novell, Inc (http://www.novell.com)
  * Copyright 2011 Xamarin, Inc (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifndef __MONO_TLS_H__
@@ -22,11 +23,9 @@ typedef enum {
 	TLS_KEY_DOMAIN = 2,
 	TLS_KEY_LMF = 3,
 	TLS_KEY_SGEN_THREAD_INFO = 4,
-	TLS_KEY_SGEN_TLAB_NEXT_ADDR = 5,
-	TLS_KEY_SGEN_TLAB_TEMP_END = 6,
-	TLS_KEY_BOEHM_GC_THREAD = 7,
-	TLS_KEY_LMF_ADDR = 8,
-	TLS_KEY_NUM = 9
+	TLS_KEY_BOEHM_GC_THREAD = 5,
+	TLS_KEY_LMF_ADDR = 6,
+	TLS_KEY_NUM = 7
 } MonoTlsKey;
 
 #ifdef HOST_WIN32

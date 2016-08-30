@@ -125,12 +125,10 @@ namespace System.Net.Sockets
 				socket.Bind (localEP);
 		}
 
-#region Close
 		public void Close ()
 		{
-			((IDisposable) this).Dispose ();	
+			Dispose ();
 		}
-#endregion
 #region Connect
 
 		void DoConnect (IPEndPoint endPoint)
@@ -298,7 +296,7 @@ namespace System.Net.Sockets
 			CheckDisposed ();
 
 			byte [] recBuffer = new byte [65536]; // Max. size
-			EndPoint endPoint = new IPEndPoint (IPAddress.Any, 0);
+			EndPoint endPoint = (EndPoint) remoteEP;
 			int dataRead = socket.ReceiveFrom (recBuffer, ref endPoint);
 			if (dataRead < recBuffer.Length)
 				recBuffer = CutArray (recBuffer, dataRead);
@@ -570,7 +568,7 @@ namespace System.Net.Sockets
 
 #endregion
 #region Disposing
-		void IDisposable.Dispose ()
+		public void Dispose ()
 		{
 			Dispose (true);
 			GC.SuppressFinalize (this);

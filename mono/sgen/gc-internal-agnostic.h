@@ -3,18 +3,7 @@
  *
  * Copyright (C) 2015 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifndef __MONO_METADATA_GCINTERNALAGNOSTIC_H__
@@ -67,7 +56,7 @@ typedef enum {
 
 #define MONO_GC_HANDLE_TYPE_SHIFT (3)
 #define MONO_GC_HANDLE_TYPE_MASK ((1 << MONO_GC_HANDLE_TYPE_SHIFT) - 1)
-#define MONO_GC_HANDLE_TYPE(x) (((x) & MONO_GC_HANDLE_TYPE_MASK) - 1)
+#define MONO_GC_HANDLE_TYPE(x) ((GCHandleType)(((x) & MONO_GC_HANDLE_TYPE_MASK) - 1))
 #define MONO_GC_HANDLE_SLOT(x) ((x) >> MONO_GC_HANDLE_TYPE_SHIFT)
 #define MONO_GC_HANDLE_TYPE_IS_WEAK(x) ((x) <= HANDLE_WEAK_TRACK)
 #define MONO_GC_HANDLE(slot, type) (((slot) << MONO_GC_HANDLE_TYPE_SHIFT) | (((type) & MONO_GC_HANDLE_TYPE_MASK) + 1))

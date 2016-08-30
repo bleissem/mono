@@ -477,7 +477,7 @@ namespace System.Runtime.Remoting
 		public static bool IsMethodOverloaded(IMethodMessage msg)
 		{
 			const BindingFlags bfinst = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
-			MonoType type = (MonoType) msg.MethodBase.DeclaringType;
+			RuntimeType type = (RuntimeType) msg.MethodBase.DeclaringType;
 			return type.GetMethodsByName (msg.MethodName, bfinst, false, type).Length > 1;
 		}
 
@@ -581,7 +581,7 @@ namespace System.Runtime.Remoting
 			RemotingProxy proxy = new RemotingProxy (type, ChannelServices.CrossContextUrl, activationAttributes);
 			return proxy.GetTransparentProxy();
 		}
-#if !NET_2_1
+#if !MOBILE
 		internal static object CreateClientProxyForComInterop (Type type)
 		{
 			Mono.Interop.ComInteropProxy proxy = Mono.Interop.ComInteropProxy.CreateProxy (type);
@@ -819,7 +819,9 @@ namespace System.Runtime.Remoting
 					}
 					catch (Exception e) {
 						if (e is ThreadAbortException) {
+#if MONO_FEATURE_THREAD_ABORT
 							Thread.ResetAbort ();
+#endif
 							retry = 5;
 							ex = e;
 						}
@@ -840,7 +842,9 @@ namespace System.Runtime.Remoting
 			catch (Exception tex)
 			{
 				byte[] data = SerializeExceptionData (tex);
+#if MONO_FEATURE_THREAD_ABORT
 				Thread.ResetAbort ();
+#endif
 				return data;
 			}
 		}

@@ -126,11 +126,12 @@ namespace Mono.CSharp {
 	/// <remarks>
 	///   Base class for expressions
 	/// </remarks>
-	public abstract class Expression {
+	public abstract class Expression
+	{
 		public ExprClass eclass;
 		protected TypeSpec type;
 		protected Location loc;
-		
+
 		public TypeSpec Type {
 			get { return type; }
 			set { type = value; }
@@ -258,7 +259,7 @@ namespace Mono.CSharp {
 		{
 			report.Error (201, loc, "Only assignment, call, increment, decrement, await, and new object expressions can be used as a statement");
 		}
-		
+
 		public void Error_InvalidExpressionStatement (BlockContext bc)
 		{
 			Error_InvalidExpressionStatement (bc.Report, loc);
@@ -286,6 +287,10 @@ namespace Mono.CSharp {
 				return;
 
 			if (type == InternalType.ErrorType || target == InternalType.ErrorType)
+				return;
+
+			if (type.MemberDefinition.DeclaringAssembly.IsMissing ||
+				target.MemberDefinition.DeclaringAssembly.IsMissing)
 				return;
 
 			string from_type = type.GetSignatureForError ();
@@ -469,8 +474,13 @@ namespace Mono.CSharp {
 			return false;
 		}
 
-		protected static TypeSpec LiftMemberType (ResolveContext rc, TypeSpec type)
+		protected TypeSpec LiftMemberType (ResolveContext rc, TypeSpec type)
 		{
+			var tps = type as TypeParameterSpec;
+			if (tps != null && !(tps.IsReferenceType || tps.IsValueType)) {
+				Error_OperatorCannotBeApplied (rc, loc, "?", type);
+			}
+
 			return TypeSpec.IsValueType (type) && !type.IsNullableType ?
 				Nullable.NullableInfo.MakeType (rc.Module, type) :
 				type;
@@ -1332,7 +1342,7 @@ namespace Mono.CSharp {
 		{
 		}
 
-		public ExpressionStatement ResolveStatement (BlockContext ec)
+		public virtual ExpressionStatement ResolveStatement (BlockContext ec)
 		{
 			Expression e = Resolve (ec);
 			if (e == null)
@@ -2919,15 +2929,6 @@ namespace Mono.CSharp {
 					return me;
 				}
 
-				//
-				// Stage 3: Lookup nested types, namespaces and type parameters in the context
-				//
-				if ((restrictions & MemberLookupRestrictions.InvocableOnly) == 0 && !variable_found) {
-					if (IsPossibleTypeOrNamespace (rc)) {
-						return ResolveAsTypeOrNamespace (rc, false);
-					}
-				}
-
 				var expr = NamespaceContainer.LookupStaticUsings (rc, Name, Arity, loc);
 				if (expr != null) {
 					if (Arity > 0) {
@@ -2938,6 +2939,15 @@ namespace Mono.CSharp {
 							me.SetTypeArguments (rc, targs);
 					}
 					return expr;
+				}
+
+				//
+				// Stage 3: Lookup nested types, namespaces and type parameters in the context
+				//
+				if ((restrictions & MemberLookupRestrictions.InvocableOnly) == 0 && !variable_found) {
+					if (IsPossibleTypeOrNamespace (rc)) {
+						return ResolveAsTypeOrNamespace (rc, false);
+					}
 				}
 
 				if ((restrictions & MemberLookupRestrictions.NameOfExcluded) == 0 && Name == "nameof")
@@ -3682,7 +3692,7 @@ namespace Mono.CSharp {
 
 		public virtual MemberExpr ResolveMemberAccess (ResolveContext ec, Expression left, SimpleName original)
 		{
-			if (left != null && !ConditionalAccess && left.IsNull && TypeSpec.IsReferenceType (left.Type)) {
+			if (left != null && !ConditionalAccess && !ec.HasSet (ResolveContext.Options.NameOfScope) && left.IsNull && TypeSpec.IsReferenceType (left.Type)) {
 				ec.Report.Warning (1720, 1, left.Location,
 					"Expression will always cause a `{0}'", "System.NullReferenceException");
 			}
@@ -4255,6 +4265,7 @@ namespace Mono.CSharp {
 
 			var emg = new ExtensionMethodGroupExpr (methods, InstanceExpression, loc);
 			emg.SetTypeArguments (rc, type_arguments);
+			emg.ConditionalAccess = ConditionalAccess;
 			return emg;
 		}
 
@@ -4462,6 +4473,10 @@ namespace Mono.CSharp {
 			TypeSpec argument_type = a.Type;
 
 			//
+			// Exactly matching Expression phase
+			//
+
+			//
 			// If argument is an anonymous function
 			//
 			if (argument_type == InternalType.AnonymousMethod && ec.Module.Compiler.Settings.Version > LanguageVersion.ISO_2) {
@@ -4476,8 +4491,8 @@ namespace Mono.CSharp {
 					//
 					// Uwrap delegate from Expression<T>
 					//
-					q = TypeManager.GetTypeArguments (q)[0];
-					p = TypeManager.GetTypeArguments (p)[0];
+					q = TypeManager.GetTypeArguments (q) [0];
+					p = TypeManager.GetTypeArguments (p) [0];
 				}
 
 				var p_m = Delegate.GetInvokeMethod (p);
@@ -4504,10 +4519,10 @@ namespace Mono.CSharp {
 				// if p has a return type Y, and q is void returning, then C1 is the better conversion.
 				//
 				if (q.Kind == MemberKind.Void) {
-					return p.Kind != MemberKind.Void ? 1: 0;
+					return p.Kind != MemberKind.Void ? 1 : 0;
 				}
 
-				var am = (AnonymousMethodExpression) a.Expr;
+				var am = (AnonymousMethodExpression)a.Expr;
 
 				//
 				// When anonymous method is an asynchronous, and P has a return type Task<Y1>, and Q has a return type Task<Y2>
@@ -4515,24 +4530,27 @@ namespace Mono.CSharp {
 				//
 				if (p.IsGenericTask || q.IsGenericTask) {
 					if (am.Block.IsAsync && p.IsGenericTask && q.IsGenericTask) {
-						q = q.TypeArguments[0];
-						p = p.TypeArguments[0];
+						q = q.TypeArguments [0];
+						p = p.TypeArguments [0];
 					}
 				}
 
 				if (q != p) {
 					//
-					// An inferred return type X exists for E in the context of that parameter list, and 
-					// the conversion from X to Y1 is better than the conversion from X to Y2
+					// An inferred return type X exists for E in the context of the parameter list, and
+					// an identity conversion exists from X to the return type of D
 					//
-					argument_type = am.InferReturnType (ec, null, orig_q);
-					if (argument_type == null) {
-						// TODO: Can this be hit?
-						return 1;
-					}
+					var inferred_type = am.InferReturnType (ec, null, orig_q);
+					if (inferred_type != null) {
+						if (inferred_type.BuiltinType == BuiltinTypeSpec.Type.Dynamic)
+							inferred_type = ec.BuiltinTypes.Object;
 
-					if (argument_type.BuiltinType == BuiltinTypeSpec.Type.Dynamic)
-						argument_type = ec.BuiltinTypes.Object;
+						if (inferred_type == p)
+							return 1;
+
+						if (inferred_type == q)
+							return 2;
+					}
 				}
 			}
 
@@ -4542,11 +4560,78 @@ namespace Mono.CSharp {
 			if (argument_type == q)
 				return 2;
 
-			//
-			// The parameters are identicial and return type is not void, use better type conversion
-			// on return type to determine better one
-			//
-			return BetterTypeConversion (ec, p, q);
+			return IsBetterConversionTarget (ec, p, q);
+		}
+
+		static int IsBetterConversionTarget (ResolveContext rc, TypeSpec p, TypeSpec q)
+		{
+			if ((p.Kind == MemberKind.Delegate || p.IsExpressionTreeType) && (q.Kind == MemberKind.Delegate || q.IsExpressionTreeType)) {
+
+				if (p.Kind != MemberKind.Delegate) {
+					p = TypeManager.GetTypeArguments (p) [0];
+				}
+
+				if (q.Kind != MemberKind.Delegate) {
+					q = TypeManager.GetTypeArguments (q) [0];
+				}
+
+				var p_m = Delegate.GetInvokeMethod (p);
+				var q_m = Delegate.GetInvokeMethod (q);
+
+				p = p_m.ReturnType;
+				q = q_m.ReturnType;
+
+				//
+				// if p is void returning, and q has a return type Y, then C2 is the better conversion.
+				//
+				if (p.Kind == MemberKind.Void) {
+					return q.Kind != MemberKind.Void ? 2 : 0;
+				}
+
+				//
+				// if p has a return type Y, and q is void returning, then C1 is the better conversion.
+				//
+				if (q.Kind == MemberKind.Void) {
+					return p.Kind != MemberKind.Void ? 1 : 0;
+				}
+
+				return IsBetterConversionTarget (rc, p, q);
+			}
+
+			if (p.IsGenericTask && q.IsGenericTask) {
+				q = q.TypeArguments [0];
+				p = p.TypeArguments [0];
+				return IsBetterConversionTarget (rc, p, q);
+			}
+
+			var p_orig = p;
+			if (p.IsNullableType) {
+				p = Nullable.NullableInfo.GetUnderlyingType (p);
+				if (!BuiltinTypeSpec.IsPrimitiveTypeOrDecimal (p))
+					return BetterTypeConversionImplicitConversion (rc, p_orig, q);
+
+				//
+				// Spec expects implicit conversion check between p and q, q and p
+				// to be done before nullable unwrapping but that's expensive operation.
+				// 
+				// Extra manual tweak is needed because BetterTypeConversion works on
+				// unwrapped types
+				//
+				if (p == q)
+					return 2;
+			}
+
+			var q_orig = q;
+			if (q.IsNullableType) {
+				q = Nullable.NullableInfo.GetUnderlyingType (q);
+				if (!BuiltinTypeSpec.IsPrimitiveTypeOrDecimal (q))
+					return BetterTypeConversionImplicitConversion (rc, p_orig, q_orig);
+
+				if (q == p)
+					return 1;
+			}
+
+			return BetterTypeConversion (rc, p, q);
 		}
 
 		//
@@ -4584,8 +4669,9 @@ namespace Mono.CSharp {
 				}
 				break;
 			case BuiltinTypeSpec.Type.Dynamic:
-				// Dynamic is never better
-				return 2;
+				// LAMESPEC: Dynamic conversions is not considered
+				p = ec.Module.Compiler.BuiltinTypes.Object;
+				break;
 			}
 
 			switch (q.BuiltinType) {
@@ -4615,18 +4701,22 @@ namespace Mono.CSharp {
 				}
 				break;
 			case BuiltinTypeSpec.Type.Dynamic:
-				// Dynamic is never better
-				return 1;
+				// LAMESPEC: Dynamic conversions is not considered
+				q = ec.Module.Compiler.BuiltinTypes.Object;
+				break;
 			}
 
-			// FIXME: handle lifted operators
+			return BetterTypeConversionImplicitConversion (ec, p, q);
+		}
 
+		static int BetterTypeConversionImplicitConversion (ResolveContext rc, TypeSpec p, TypeSpec q)
+		{
 			// TODO: this is expensive
 			Expression p_tmp = new EmptyExpression (p);
 			Expression q_tmp = new EmptyExpression (q);
 
-			bool p_to_q = Convert.ImplicitConversionExists (ec, p_tmp, q);
-			bool q_to_p = Convert.ImplicitConversionExists (ec, q_tmp, p);
+			bool p_to_q = Convert.ImplicitConversionExists (rc, p_tmp, q);
+			bool q_to_p = Convert.ImplicitConversionExists (rc, q_tmp, p);
 
 			if (p_to_q && !q_to_p)
 				return 1;
@@ -4646,13 +4736,15 @@ namespace Mono.CSharp {
 		///     false if candidate ain't better
 		///     true  if candidate is better than the current best match
 		/// </remarks>
-		static bool BetterFunction (ResolveContext ec, Arguments args, MemberSpec candidate, AParametersCollection cparam, bool candidate_params,
+		bool BetterFunction (ResolveContext ec, Arguments args, MemberSpec candidate, AParametersCollection cparam, bool candidate_params,
 			MemberSpec best, AParametersCollection bparam, bool best_params)
 		{
 			AParametersCollection candidate_pd = ((IParametersMember) candidate).Parameters;
 			AParametersCollection best_pd = ((IParametersMember) best).Parameters;
 
-			bool better_at_least_one = false;
+			int candidate_better_count = 0;
+			int best_better_count = 0;
+
 			bool are_equivalent = true;
 			int args_count = args == null ? 0 : args.Count;
 			int j = 0;
@@ -4703,28 +4795,52 @@ namespace Mono.CSharp {
 
 				// for each argument, the conversion to 'ct' should be no worse than 
 				// the conversion to 'bt'.
-				if (result == 2)
-					return false;
+				if (result == 2) {
+					//
+					// No optional parameters tie breaking rules for delegates overload resolution
+					//
+					if ((restrictions & Restrictions.CovariantDelegate) != 0)
+						return false;
+
+					++best_better_count;
+					continue;
+				}
 
 				// for at least one argument, the conversion to 'ct' should be better than 
 				// the conversion to 'bt'.
 				if (result != 0)
-					better_at_least_one = true;
+					++candidate_better_count;
 			}
 
-			if (better_at_least_one)
+			if (candidate_better_count != 0 && best_better_count == 0)
 				return true;
 
+			if (best_better_count > 0 && candidate_better_count == 0)
+				return false;
+
 			//
-			// Tie-breaking rules are applied only for equivalent parameter types
+			// LAMESPEC: Tie-breaking rules for not equivalent parameter types
 			//
 			if (!are_equivalent) {
+				while (j < args_count && !args [j++].IsDefaultArgument) ;
+
 				//
-				// LAMESPEC: A candidate with less default parameters is still better when there
+				// A candidate with no default parameters is still better when there
 				// is no better expression conversion
 				//
-				if (candidate_pd.Count < best_pd.Count && !candidate_params && best_pd.FixedParameters [j].HasDefaultValue) {
-					return true;
+				if (candidate_pd.Count < best_pd.Count) {
+					if (!candidate_params && !candidate_pd.FixedParameters [j - j].HasDefaultValue) {
+						return true;
+					}
+				} else if (candidate_pd.Count == best_pd.Count) {
+					if (candidate_params)
+						return false;
+
+					if (!candidate_pd.FixedParameters [j - 1].HasDefaultValue && best_pd.FixedParameters [j - 1].HasDefaultValue)
+						return true;
+
+					if (candidate_pd.FixedParameters [j - 1].HasDefaultValue && best_pd.HasParams)
+						return true;
 				}
 
 				return false;
@@ -4740,13 +4856,15 @@ namespace Mono.CSharp {
 			//
 			// We have not reached end of parameters list due to params or used default parameters
 			//
+			bool defaults_ambiguity = false;
 			while (j < candidate_pd.Count && j < best_pd.Count) {
 				var cand_param = candidate_pd.FixedParameters [j];
 				var best_param = best_pd.FixedParameters [j];
 
-				if (cand_param.HasDefaultValue != best_param.HasDefaultValue)
+				if (cand_param.HasDefaultValue != best_param.HasDefaultValue && (!candidate_pd.HasParams || !best_pd.HasParams))
 					return cand_param.HasDefaultValue;
 
+				defaults_ambiguity = true;
 				if (candidate_pd.Count == best_pd.Count) {
 					//
 					// LAMESPEC:
@@ -4754,27 +4872,30 @@ namespace Mono.CSharp {
 					// void Foo (int i = 0) is better than void Foo (params int[]) for Foo ()
 					// void Foo (string[] s, string value = null) is better than Foo (string s, params string[]) for Foo (null) or Foo ()
 					//
-
 					if (cand_param.HasDefaultValue) {
 						++j;
 						continue;
 					}
-				} else {
-					//
-					// Neither is better when not all arguments are provided
-					//
-					// void Foo (string s, int i = 0) <-> Foo (string s, int i = 0, int i2 = 0)
-					// void Foo (string s, int i = 0) <-> Foo (string s, byte i = 0)
-					// void Foo (string s, params int[]) <-> Foo (string s, params byte[])
-					//
-					return false;
+
+					break;
 				}
 
-				break;
+				//
+				// Neither is better when not all arguments are provided
+				//
+				// void Foo (string s, int i = 0) <-> Foo (string s, int i = 0, int i2 = 0)
+				// void Foo (string s, int i = 0) <-> Foo (string s, byte i = 0)
+				// void Foo (string s, params int[]) <-> Foo (string s, params byte[])
+				//
+				++j;
 			}
 
-			if (candidate_pd.Count != best_pd.Count)
+			if (candidate_pd.Count != best_pd.Count) {
+				if (defaults_ambiguity && best_pd.Count - 1 == j)
+					return best_pd.HasParams;
+
 				return candidate_pd.Count < best_pd.Count;
+			}
 
 			//
 			// One is a non-generic method and second is a generic method, then non-generic is better
@@ -6053,6 +6174,12 @@ namespace Mono.CSharp {
 			ResolveInstanceExpression (rc, null);
 			DoBestMemberChecks (rc, constant);
 
+			if (rc.HasSet (ResolveContext.Options.NameOfScope)) {
+				eclass = ExprClass.Value;
+				type = constant.MemberType;
+				return this;
+			}
+
 			var c = constant.GetConstant (rc);
 
 			// Creates reference expression to the constant value
@@ -6531,6 +6658,8 @@ namespace Mono.CSharp {
 
 				ec.Emit (OpCodes.Ldsfld, spec);
 			} else {
+				var ca = ec.ConditionalAccess;
+
 				if (!prepared) {
 					if (conditional_access_receiver)
 						ec.ConditionalAccess = new ConditionalAccessContext (type, ec.DefineLabel ());
@@ -6556,6 +6685,7 @@ namespace Mono.CSharp {
 
 				if (conditional_access_receiver) {
 					ec.CloseConditionalAccess (type.IsNullableType && type != spec.MemberType ? type : null);
+					ec.ConditionalAccess = ca;
 				}
 			}
 

@@ -24,6 +24,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 using System;
+using System.Threading;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Mono.Security.Interface
@@ -48,7 +49,7 @@ namespace Mono.Security.Interface
 			set { checkCertRevocationStatus = value; }
 		}
 
-		public bool UseServicePointManagerCallback {
+		public bool? UseServicePointManagerCallback {
 			get { return useServicePointManagerCallback; }
 			set { useServicePointManagerCallback = value; }
 		}
@@ -81,16 +82,38 @@ namespace Mono.Security.Interface
 			get; set;
 		}
 
+		public CipherSuiteCode[] EnabledCiphers {
+			get; set;
+		}
+
 		bool cloned = false;
 		bool checkCertName = true;
 		bool checkCertRevocationStatus = false;
-		bool useServicePointManagerCallback = false;
+		bool? useServicePointManagerCallback = null;
 		bool skipSystemValidators = false;
 		bool callbackNeedsChain = true;
 		ICertificateValidator certificateValidator;
 
 		public MonoTlsSettings ()
 		{
+		}
+
+		static MonoTlsSettings defaultSettings;
+
+		public static MonoTlsSettings DefaultSettings {
+			get {
+				if (defaultSettings == null)
+					Interlocked.CompareExchange (ref defaultSettings, new MonoTlsSettings (), null);
+				return defaultSettings;
+			}
+			set {
+				defaultSettings = value ?? new MonoTlsSettings ();
+			}
+		}
+
+		public static MonoTlsSettings CopyDefaultSettings ()
+		{
+			return DefaultSettings.Clone ();
 		}
 
 		#region Private APIs
@@ -120,6 +143,11 @@ namespace Mono.Security.Interface
 			return copy;
 		}
 
+		public MonoTlsSettings Clone ()
+		{
+			return new MonoTlsSettings (this);
+		}
+
 		MonoTlsSettings (MonoTlsSettings other)
 		{
 			RemoteCertificateValidationCallback = other.RemoteCertificateValidationCallback;
@@ -131,6 +159,7 @@ namespace Mono.Security.Interface
 			callbackNeedsChain = other.callbackNeedsChain;
 			UserSettings = other.UserSettings;
 			EnabledProtocols = other.EnabledProtocols;
+			EnabledCiphers = other.EnabledCiphers;
 			TrustAnchors = other.TrustAnchors;
 			cloned = true;
 		}

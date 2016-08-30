@@ -93,8 +93,10 @@ namespace MonoTests.System
 				} catch (DllNotFoundException e) {
 					return;
 				}
-
+#if !MONOTOUCH && !XAMMAC
+				// this assumption is incorrect for iOS, tvO, watchOS and OSX
 				Assert.IsTrue (TimeZoneInfo.Local.Id != "Local", "Local timezone id should not be \"Local\"");
+#endif
 			}
 		}
 
@@ -356,6 +358,21 @@ namespace MonoTests.System
 				var date = new DateTime (2014, 3, 30 , 2, 0, 0);
 				Assert.IsFalse (tzi.IsDaylightSavingTime (date));
 				Assert.AreEqual (new TimeSpan (2,0,0), tzi.GetUtcOffset (date));
+			}
+
+			[Test] //Covers #41349
+			public void TestIsDST_DateTimeOffset ()
+			{
+				TimeZoneInfo tzi = TimeZoneInfo.FindSystemTimeZoneById ("Europe/Athens");
+				var date = new DateTime (2014, 3, 30 , 2, 0, 0);
+				var offset = tzi.GetUtcOffset (date);
+				var dateOffset = new DateTimeOffset (date, offset);
+				Assert.IsFalse (tzi.IsDaylightSavingTime (dateOffset));
+
+				date = new DateTime (2014, 3, 30 , 3, 0, 0);
+				offset = tzi.GetUtcOffset (date);
+				dateOffset = new DateTimeOffset (date, offset);
+				Assert.IsTrue (tzi.IsDaylightSavingTime (dateOffset));
 			}
 		}
 		
@@ -657,6 +674,14 @@ namespace MonoTests.System
 				Assert.AreEqual (expectedDate, lastMidnightAsEST);
 				Assert.AreEqual (lastMidnight, lastMidnightAsPST);
 			}
+
+			[Test]
+			public void ConvertTimeBySystemTimeZoneId_UtcId ()
+			{
+				DateTime localTime = TimeZoneInfo.ConvertTime (DateTime.UtcNow, TimeZoneInfo.Utc, TimeZoneInfo.Local);
+
+				TimeZoneInfo.ConvertTimeBySystemTimeZoneId (DateTime.UtcNow, TimeZoneInfo.Utc.Id, TimeZoneInfo.Local.Id);
+			}
 		}
 		
 		[TestFixture]
@@ -780,6 +805,17 @@ namespace MonoTests.System
 				var timeZones = (global::System.Collections.ObjectModel.ReadOnlyCollection<TimeZoneInfo>) method.Invoke (null, null);
 				Assert.IsTrue (timeZones.Count > 0, "GetSystemTimeZones should not return an empty collection.");
 			}
+
+#if !MOBILE
+			[Test]
+			public void WindowsRegistryTimezoneWithParentheses ()
+			{
+				var method = (MethodInfo) typeof (TimeZoneInfo).GetMember ("TrimSpecial", MemberTypes.Method, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)[0];
+
+				var name = method.Invoke (null, new object [] { " <--->  Central Standard Time (Mexico)   ||<<>>" });
+				Assert.AreEqual (name, "Central Standard Time (Mexico)", "#1");
+			}
+#endif
 		}
 		
 		[TestFixture]
@@ -910,17 +946,17 @@ namespace MonoTests.System
 					"Canada/Newfoundland",
 					"Europe/Moscow",
 					"Europe/Riga",
-					"N/A", // testing that the test doesn't fail with inexistent TZs
 				};
 				foreach (var tz in subMinuteDSTs) {
-					try {
-						TimeZoneInfo.FindSystemTimeZoneById (tz);
-					} catch (TimeZoneNotFoundException) {
-						// ok;
-					} catch (Exception ex) {
-						Assert.Fail (string.Format ("Failed to load TZ {0}: {1}", tz, ex.ToString ()));
-					}
+					TimeZoneInfo.FindSystemTimeZoneById (tz);
 				}
+			}
+
+			[Test]
+			[ExpectedException (typeof (TimeZoneNotFoundException))]
+			public void InvalidName ()
+			{
+				TimeZoneInfo.FindSystemTimeZoneById ("N/A");
 			}
 		}
 		
@@ -1119,7 +1155,49 @@ namespace MonoTests.System
 				Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset (d));
 				Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset (d.Add (new TimeSpan(0,0,0, 1))));
 			}
-		}
+
+		  [Test]
+		  public void  GetUtcOffset_FromDateTimeOffset ()
+		  {
+			  DateTimeOffset offset;
+
+			  offset = new DateTimeOffset(dst1Start, baseUtcOffset);
+			  Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, -1))), "dst1Start_with_baseUtcOffset#before");
+			  Assert.AreEqual(dstUtcOffset, cairo.GetUtcOffset(offset), "dst1Start_with_baseUtcOffset#exact");
+			  Assert.AreEqual(dstUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, 1))), "dst1Start_with_baseUtcOffset#after");
+
+			  offset = new DateTimeOffset(dst1End, dstOffset + baseUtcOffset);
+			  Assert.AreEqual(dstUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, -1))), "dst1End_with_dstOffset+baseUtcOffset#before");
+			  Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset(offset), "dst1End_with_dstOffset+baseUtcOffset#exact");
+			  Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, 1))), "dst1End_with_dstOffset+baseUtcOffset#after");
+
+			  offset = new DateTimeOffset(dst2Start, baseUtcOffset);
+			  Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, -1))), "dst2Start_with_baseUtcOffset#before");
+			  Assert.AreEqual(dstUtcOffset, cairo.GetUtcOffset(offset), "dst2Start_with_baseUtcOffset#exact");
+			  Assert.AreEqual(dstUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, 1))), "dst2Start_with_baseUtcOffset#after");
+
+			  offset = new DateTimeOffset(dst2End, baseUtcOffset + dstOffset);
+			  Assert.AreEqual(dstUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, -1))), "dst2End_with_dstOffset+baseUtcOffset#before");
+			  Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset(offset), "dst2End_with_dstOffset+baseUtcOffset#exact");
+			  Assert.AreEqual(baseUtcOffset, cairo.GetUtcOffset(offset.Add(new TimeSpan(0, 0, 0, 1))), "dst2End_with_dstOffset+baseUtcOffset#after");
+		  }
+
+			[Test]
+			public void DTS_WithMinimalDate ()
+			{
+				TimeZoneInfo.TransitionTime startTransition, endTransition;
+				startTransition = TimeZoneInfo.TransitionTime.CreateFloatingDateRule (new DateTime (1, 1, 1, 4, 0, 0),
+																				  10, 2, DayOfWeek.Sunday);
+				endTransition = TimeZoneInfo.TransitionTime.CreateFloatingDateRule (new DateTime (1, 1, 1, 3, 0, 0),
+																				3, 2, DayOfWeek.Sunday);
+
+				var ctz = TimeZoneInfo.CreateCustomTimeZone ("test", TimeSpan.FromHours (-5), "display", "sdisplay", "dst", new [] {
+					TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule (DateTime.MinValue, DateTime.MaxValue.Date, TimeSpan.FromHours (-1), startTransition, endTransition) });
+
+				var offset = ctz.GetUtcOffset (DateTime.MinValue);
+				Assert.AreEqual (TimeSpan.FromHours (-5), offset); // TODO: Wrong it should be -6
+			}
+    }
 
 		[TestFixture]
 		public class GetDaylightChanges
@@ -1160,6 +1238,31 @@ namespace MonoTests.System
 						Assert.Fail ("TimeZone " + tz.Id + " exception: " + e.ToString ()); 
 					}
 				}
+			}
+		}
+
+		[TestFixture]
+		public class ParseTZBuffer
+		{
+			MethodInfo parseTZBuffer;
+
+			[SetUp]
+			public void Setup()
+			{
+				var flags = BindingFlags.Static | BindingFlags.NonPublic;
+				parseTZBuffer = typeof (TimeZoneInfo).GetMethod ("ParseTZBuffer", flags);
+			}
+
+			[Test]
+			public void Bug31432 ()
+			{
+				// Europe/Moscow from failing device
+				var base64Data = "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";
+
+				var data = Convert.FromBase64String (base64Data);
+
+				var tz = parseTZBuffer.Invoke (null, new object[] { "Test", data, data.Length});
+				Assert.IsTrue (tz != null);
 			}
 		}
 	}

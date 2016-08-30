@@ -51,17 +51,17 @@ namespace MonoTests.System.Xml
 		public void CreateEvidenceForUrl_Basic ()
 		{
 			Evidence e = XmlSecureResolver.CreateEvidenceForUrl (null);
-#if DISABLE_CAS_USE
-			Assert.IsNull (e);
-#else
+#if FEATURE_MONO_CAS
 			Assert.AreEqual (0, e.Count, "null");
+#else
+			Assert.IsNull (e);
 #endif
 
 			e = XmlSecureResolver.CreateEvidenceForUrl (String.Empty);
-#if DISABLE_CAS_USE
-			Assert.IsNull (e);
-#else
+#if FEATURE_MONO_CAS
 			Assert.AreEqual (0, e.Count, "String.Empty");
+#else
+			Assert.IsNull (e);
 #endif
 		}
 
@@ -124,7 +124,6 @@ namespace MonoTests.System.Xml
 			Assert.IsTrue (site, "Site-2");
 		}
 
-#if NET_4_5
 		[Test]
 		[Category("Async")]
 		public void TestAsync ()
@@ -139,7 +138,6 @@ namespace MonoTests.System.Xml
 			Assert.That (task.Wait (3000));
 			Assert.IsInstanceOfType (typeof (Stream), task.Result);
 		}
-#endif
 
 	}
 }

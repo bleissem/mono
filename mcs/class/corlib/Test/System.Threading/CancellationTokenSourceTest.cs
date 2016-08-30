@@ -38,7 +38,6 @@ namespace MonoTests.System.Threading
 	[TestFixture]
 	public class CancellationTokenSourceTest
 	{
-#if NET_4_5
 
 		[Test]
 		public void Ctor_Invalid ()
@@ -55,8 +54,10 @@ namespace MonoTests.System.Threading
 		{
 			int called = 0;
 			var cts = new CancellationTokenSource (TimeSpan.FromMilliseconds (20));
-			cts.Token.Register (() => called++);
-			Thread.Sleep (50);
+			var mre = new ManualResetEvent (false);
+			cts.Token.Register (() => { called++; mre.Set (); });
+
+			Assert.IsTrue (mre.WaitOne (1000), "Not called in 1000ms");
 			Assert.AreEqual (1, called, "#1");
 		}
 
@@ -65,9 +66,11 @@ namespace MonoTests.System.Threading
 		{
 			int called = 0;
 			var cts = new CancellationTokenSource ();
-			cts.Token.Register (() => called++);
+			var mre = new ManualResetEvent(false);
+			cts.Token.Register (() => { called++; mre.Set (); });
 			cts.CancelAfter (20);
-			Thread.Sleep (50);
+
+			Assert.IsTrue(mre.WaitOne (1000), "Should be cancelled in ~20ms");
 			Assert.AreEqual (1, called, "#1");
 		}
 
@@ -87,14 +90,15 @@ namespace MonoTests.System.Threading
 		{
 			int called = 0;
 			var cts = new CancellationTokenSource ();
-			cts.Token.Register (() => called++);
+			var mre = new ManualResetEvent (false);
+			cts.Token.Register (() => { called++; mre.Set (); });
 			cts.CancelAfter (50);
 			cts.Dispose ();
-			Thread.Sleep (100);
+
+			Assert.IsFalse (mre.WaitOne (100), "Shouldn't have been called");
 			Assert.AreEqual (0, called, "#1");
 		}
 
-#endif
 
 		[Test]
 		public void Token ()
@@ -339,13 +343,11 @@ namespace MonoTests.System.Threading
 			} catch (ObjectDisposedException) {
 			}
 
-#if NET_4_5
 			try {
 				cts.CancelAfter (1);
 				Assert.Fail ("#6");
 			} catch (ObjectDisposedException) {
 			}
-#endif
 		}
 
 		[Test]
@@ -472,7 +474,6 @@ namespace MonoTests.System.Threading
 			}
 		}
 
-#if NET_4_5
 		[Test]
 		public void DisposeRace ()
 		{
@@ -484,7 +485,6 @@ namespace MonoTests.System.Threading
 				c1.Dispose ();
 			}
 		}
-#endif
 	}
 }
 

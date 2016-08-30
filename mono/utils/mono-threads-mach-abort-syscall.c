@@ -21,18 +21,18 @@
 #if defined(HOST_WATCHOS) || defined(HOST_TVOS)
 
 void
-mono_threads_init_abort_syscall (void)
+mono_threads_abort_syscall_init (void)
 {
 }
 
 void
-mono_threads_core_abort_syscall (MonoThreadInfo *info)
+mono_threads_suspend_abort_syscall (MonoThreadInfo *info)
 {
 
 }
 
 gboolean
-mono_threads_core_needs_abort_syscall (void)
+mono_threads_suspend_needs_abort_syscall (void)
 {
 	return FALSE;
 }
@@ -40,20 +40,25 @@ mono_threads_core_needs_abort_syscall (void)
 #else
 
 void
-mono_threads_init_abort_syscall (void)
+mono_threads_abort_syscall_init (void)
 {
 }
 
 void
-mono_threads_core_abort_syscall (MonoThreadInfo *info)
+mono_threads_suspend_abort_syscall (MonoThreadInfo *info)
 {
 	kern_return_t ret;
 
-	ret = thread_suspend (info->native_handle);
+	do {
+		ret = thread_suspend (info->native_handle);
+	} while (ret == KERN_ABORTED);
+
 	if (ret != KERN_SUCCESS)
 		return;
 
-	ret = thread_abort_safely (info->native_handle);
+	do {
+		ret = thread_abort_safely (info->native_handle);
+	} while (ret == KERN_ABORTED);
 
 	/*
 	 * We are doing thread_abort when thread_abort_safely returns KERN_SUCCESS because
@@ -66,11 +71,15 @@ mono_threads_core_abort_syscall (MonoThreadInfo *info)
 	if (ret == KERN_SUCCESS)
 		ret = thread_abort (info->native_handle);
 
-	g_assert (thread_resume (info->native_handle) == KERN_SUCCESS);
+	do {
+		ret = thread_resume (info->native_handle);
+	} while (ret == KERN_ABORTED);
+
+	g_assert (ret == KERN_SUCCESS);
 }
 
 gboolean
-mono_threads_core_needs_abort_syscall (void)
+mono_threads_suspend_needs_abort_syscall (void)
 {
 	return TRUE;
 }

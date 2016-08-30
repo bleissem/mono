@@ -72,7 +72,6 @@ namespace System.Threading {
 		/* current System.Runtime.Remoting.Contexts.Context instance
 		   keep as an object to avoid triggering its class constructor when not needed */
 		private object current_appcontext;
-		private object pending_exception;
 		private object root_domain_thread;
 		internal byte[] _serialized_principal;
 		internal int _serialized_principal_version;
@@ -91,11 +90,11 @@ namespace System.Threading {
 		private IntPtr interrupt_on_stop;
 		private IntPtr flags;
 		private IntPtr thread_pinning_ref;
+		private IntPtr start_notify_refcount;
 		/* 
 		 * These fields are used to avoid having to increment corlib versions
 		 * when a new field is added to the unmanaged MonoThread structure.
 		 */
-		private IntPtr unused1;
 		private IntPtr unused2;
 		#endregion
 #pragma warning restore 169, 414, 649
@@ -116,6 +115,8 @@ namespace System.Threading {
 		#region Sync with metadata/object-internals.h
 		private InternalThread internal_thread;
 		object m_ThreadStartArg;
+		object pending_exception;
+		int priority = (int) ThreadPriority.Normal;
 		#endregion
 #pragma warning restore 414
 
@@ -461,6 +462,7 @@ namespace System.Threading {
 			}
 		}
 
+#if MONO_FEATURE_THREAD_ABORT
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		private extern static void Abort_internal (InternalThread thread, object stateInfo);
 
@@ -488,6 +490,25 @@ namespace System.Threading {
 		void ClearAbortReason ()
 		{
 		}
+#else
+		[Obsolete ("Thread.Abort is not supported on the current platform.", true)]
+		public void Abort ()
+		{
+			throw new PlatformNotSupportedException ("Thread.Abort is not supported on the current platform.");
+		}
+
+		[Obsolete ("Thread.Abort is not supported on the current platform.", true)]
+		public void Abort (object stateInfo)
+		{
+			throw new PlatformNotSupportedException ("Thread.Abort is not supported on the current platform.");
+		}
+
+		[Obsolete ("Thread.ResetAbort is not supported on the current platform.", true)]
+		public static void ResetAbort ()
+		{
+			throw new PlatformNotSupportedException ("Thread.ResetAbort is not supported on the current platform.");
+		}
+#endif // MONO_FEATURE_THREAD_ABORT
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static void SpinWait_nop ();
@@ -722,5 +743,19 @@ namespace System.Threading {
 				res [threads [i]] = new StackTrace ((StackFrame[])stack_frames [i]);
 			return res;
 		}
+
+#if !MONO_FEATURE_THREAD_SUSPEND_RESUME
+		[Obsolete ("Thread.Suspend is not supported on the current platform.", true)]
+		public void Suspend ()
+		{
+			throw new PlatformNotSupportedException ("Thread.Suspend is not supported on the current platform.");
+		}
+
+		[Obsolete ("Thread.Resume is not supported on the current platform.", true)]
+		public void Resume ()
+		{
+			throw new PlatformNotSupportedException ("Thread.Resume is not supported on the current platform.");
+		}
+#endif
 	}
 }

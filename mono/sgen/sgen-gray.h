@@ -4,18 +4,7 @@
  * Copyright 2011 Xamarin Inc (http://www.xamarin.com)
  * Copyright (C) 2012 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #ifndef __MONO_SGEN_GRAY_H__
 #define __MONO_SGEN_GRAY_H__
@@ -108,7 +97,6 @@ struct _SgenGrayQueue {
 #ifdef SGEN_CHECK_GRAY_OBJECT_ENQUEUE
 	GrayQueueEnqueueCheckFunc enqueue_check_func;
 #endif
-	void *alloc_prepare_data;
 };
 
 typedef struct _SgenSectionGrayQueue SgenSectionGrayQueue;
@@ -141,13 +129,10 @@ GrayQueueEntry sgen_gray_object_dequeue (SgenGrayQueue *queue);
 GrayQueueSection* sgen_gray_object_dequeue_section (SgenGrayQueue *queue);
 void sgen_gray_object_enqueue_section (SgenGrayQueue *queue, GrayQueueSection *section);
 void sgen_gray_object_queue_trim_free_list (SgenGrayQueue *queue);
-void sgen_gray_object_queue_init (SgenGrayQueue *queue, GrayQueueEnqueueCheckFunc enqueue_check_func);
-void sgen_gray_object_queue_init_invalid (SgenGrayQueue *queue);
-void sgen_gray_queue_set_alloc_prepare (SgenGrayQueue *queue, GrayQueueAllocPrepareFunc alloc_prepare_func, void *data);
-void sgen_gray_object_queue_init_with_alloc_prepare (SgenGrayQueue *queue, GrayQueueEnqueueCheckFunc enqueue_check_func,
-		GrayQueueAllocPrepareFunc func, void *data);
+void sgen_gray_object_queue_init (SgenGrayQueue *queue, GrayQueueEnqueueCheckFunc enqueue_check_func, gboolean reuse_free_list);
+void sgen_gray_object_queue_dispose (SgenGrayQueue *queue);
+void sgen_gray_queue_set_alloc_prepare (SgenGrayQueue *queue, GrayQueueAllocPrepareFunc alloc_prepare_func);
 void sgen_gray_object_queue_deinit (SgenGrayQueue *queue);
-void sgen_gray_object_queue_disable_alloc_prepare (SgenGrayQueue *queue);
 void sgen_gray_object_alloc_queue_section (SgenGrayQueue *queue);
 void sgen_gray_object_free_queue_section (GrayQueueSection *section);
 

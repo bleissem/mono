@@ -5,6 +5,7 @@
  *   Mono Team (mono-list@lists.ximian.com)
  *
  * Copyright 2001-2008 Novell, Inc.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "config.h"
@@ -31,7 +32,7 @@
 #endif
 
 #include "mono-mmap.h"
-#include "mono-mmap-internal.h"
+#include "mono-mmap-internals.h"
 #include "mono-proclib.h"
 #include <mono/utils/mono-threads.h>
 

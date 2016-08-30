@@ -57,7 +57,7 @@ namespace System {
 		 * of icalls, do not require an increment.
 		 */
 #pragma warning disable 169
-		private const int mono_corlib_version = 138;
+		private const int mono_corlib_version = 153;
 #pragma warning restore 169
 
 		[ComVisible (true)]
@@ -322,7 +322,7 @@ namespace System {
 				return trace.ToString ();
 			}
 		}
-#if !NET_2_1
+#if !MOBILE
 		/// <summary>
 		/// Get a fully qualified path to the system directory
 		/// </summary>
@@ -375,7 +375,7 @@ namespace System {
 		/// </summary>
 		public static Version Version {
 			get {
-				return new Version (Consts.FxFileVersion);
+				return new Version (Consts.EnvironmentVersion);
 			}
 		}
 
@@ -480,7 +480,7 @@ namespace System {
 		/// </summary>
 		public static string GetEnvironmentVariable (string variable)
 		{
-#if !NET_2_1
+#if !MOBILE
 			if (SecurityManager.SecurityEnabled) {
 				new EnvironmentPermission (EnvironmentPermissionAccess.Read, variable).Demand ();
 			}
@@ -503,7 +503,7 @@ namespace System {
 		/// <summary>
 		/// Return a set of all environment variables and their values
 		/// </summary>
-#if !NET_2_1
+#if !MOBILE
 		public static IDictionary GetEnvironmentVariables ()
 		{
 			StringBuilder sb = null;
@@ -565,7 +565,7 @@ namespace System {
 			else
 				dir = UnixGetFolderPath (folder, option);
 
-#if !NET_2_1
+#if !MOBILE
 			if ((dir != null) && (dir.Length > 0) && SecurityManager.SecurityEnabled) {
 				new FileIOPermission (FileIOPermissionAccess.PathDiscovery, dir).Demand ();
 			}
@@ -893,11 +893,16 @@ namespace System {
 		[SecurityCritical]
 		public static void FailFast (string message, Exception exception)
 		{
-			throw new NotImplementedException ();
+#pragma warning disable 618
+			throw new ExecutionEngineException (message, exception);
+#pragma warning restore
 		}
 
+		[MethodImplAttribute (MethodImplOptions.InternalCall)]
+		extern static bool GetIs64BitOperatingSystem ();
+
 		public static bool Is64BitOperatingSystem {
-			get { return IntPtr.Size == 8; } // FIXME: is this good enough?
+			get { return GetIs64BitOperatingSystem (); }
 		}
 
 		public static int SystemPageSize {
@@ -924,7 +929,7 @@ namespace System {
 		}
 #endif
 
-#if !NET_2_1
+#if !MOBILE
 		//
 		// Used by gacutil.exe
 		//
@@ -981,6 +986,19 @@ namespace System {
 		internal static void TriggerCodeContractFailure(ContractFailureKind failureKind, String message, String condition, String exceptionAsString)
 		{
 
+		}
+
+		// Copied from referencesource Environment
+		internal static String GetStackTrace(Exception e, bool needFileInfo)
+		{
+			System.Diagnostics.StackTrace st;
+			if (e == null)
+				st = new System.Diagnostics.StackTrace(needFileInfo);
+			else
+				st = new System.Diagnostics.StackTrace(e, needFileInfo);
+
+			// Do not include a trailing newline for backwards compatibility
+			return st.ToString( System.Diagnostics.StackTrace.TraceFormat.Normal );
 		}
 	}
 }

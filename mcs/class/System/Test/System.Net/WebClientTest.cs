@@ -21,6 +21,7 @@ using MonoTests.Helpers;
 namespace MonoTests.System.Net
 {
 	[TestFixture]
+	[Category ("RequiresBSDSockets")]
 	public class WebClientTest
 	{
 		private string _tempFolder;
@@ -1423,9 +1424,7 @@ namespace MonoTests.System.Net
 			IPEndPoint ep = NetworkHelpers.LocalEphemeralEndPoint ();
 			string url = "http://" + ep.ToString () + "/test/";
 
-			using (SocketResponder responder = new SocketResponder (ep, new SocketRequestHandler (EchoRequestHandler))) {
-				responder.Start ();
-
+			using (SocketResponder responder = new SocketResponder (ep, s => EchoRequestHandler (s))) {
 				WebClient wc = new WebClient ();
 				wc.Encoding = Encoding.ASCII;
 
@@ -1782,7 +1781,6 @@ namespace MonoTests.System.Net
 			Assert.AreSame (wc.Proxy, WebRequest.DefaultWebProxy);
 		}
 		 
-#if NET_4_5
 		[Test]
 		[Category ("AndroidNotWorking")] // Fails when ran as part of the entire BCL test suite. Works when only this fixture is ran
 		public void UploadStringAsyncCancelEvent ()
@@ -1855,7 +1853,8 @@ namespace MonoTests.System.Net
 		[Category ("AndroidNotWorking")] // Test suite hangs if the tests runs as part of the entire BCL suite. Works when only this fixture is ran
 		public void UploadFileAsyncContentType ()
 		{
-			var serverUri = "http://localhost:13370/";
+			var port = NetworkHelpers.FindFreePort ();
+			var serverUri = "http://localhost:" + port + "/";
 			var filename = Path.GetTempFileName ();
 
 			HttpListener listener = new HttpListener ();
@@ -1873,17 +1872,14 @@ namespace MonoTests.System.Net
 			}
 			listener.Close ();
 		}
-#endif
 
 		public void UploadAsyncCancelEventTest (int port, Action<WebClient, Uri, EventWaitHandle> uploadAction)
 		{
 			var ep = NetworkHelpers.LocalEphemeralEndPoint ();
 			string url = "http://" + ep.ToString() + "/test/";
 
-			using (var responder = new SocketResponder (ep, EchoRequestHandler))
+			using (var responder = new SocketResponder (ep, s => EchoRequestHandler (s)))
 			{
-				responder.Start ();
-
 				var webClient = new WebClient ();
 
 				var cancellationTokenSource = new CancellationTokenSource ();

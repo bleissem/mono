@@ -26,10 +26,14 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+using System.Collections.Generic;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Specialized;
 using System.Net.Http.Headers;
+using System.Net.Security;
 using System.Linq;
 
 namespace System.Net.Http
@@ -245,8 +249,6 @@ namespace System.Net.Http
 				wr.KeepAlive = request.Headers.ConnectionClose != true;
 			}
 
-			wr.ServicePoint.Expect100Continue = request.Headers.ExpectContinue == true;
-
 			if (allowAutoRedirect) {
 				wr.AllowAutoRedirect = true;
 				wr.MaximumAutomaticRedirections = maxAutomaticRedirections;
@@ -270,7 +272,12 @@ namespace System.Net.Http
 
 			if (useProxy) {
 				wr.Proxy = proxy;
+			} else {
+				// Disables default WebRequest.DefaultWebProxy value
+				wr.Proxy = null;
 			}
+
+			wr.ServicePoint.Expect100Continue = request.Headers.ExpectContinue == true;
 
 			// Add request headers
 			var headers = wr.Headers;
@@ -294,7 +301,7 @@ namespace System.Net.Http
 				if (values_formated == null)
 					continue;
 
-				headers.AddValue (header.Key, values_formated);
+				headers.AddInternal (header.Key, values_formated);
 			}
 			
 			return wr;
@@ -343,7 +350,7 @@ namespace System.Net.Http
 
 						foreach (var header in content.Headers) {
 							foreach (var value in header.Value) {
-								headers.AddValue (header.Key, value);
+								headers.AddInternal (header.Key, value);
 							}
 						}
 
@@ -384,5 +391,74 @@ namespace System.Net.Http
 			
 			return CreateResponseMessage (wresponse, request, cancellationToken);
 		}
+
+#if NETSTANDARD
+		public bool CheckCertificateRevocationList {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public X509CertificateCollection ClientCertificates {
+			get {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public ICredentials DefaultProxyCredentials {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public int MaxConnectionsPerServer {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public int MaxResponseHeadersLength {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public IDictionary<string,object> Properties {
+			get {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public Func<HttpRequestMessage,X509Certificate2,X509Chain,SslPolicyErrors,bool> ServerCertificateCustomValidationCallback {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+		public SslProtocols SslProtocols {
+			get {
+				throw new NotImplementedException ();
+			}
+			set {
+				throw new NotImplementedException ();
+			}
+		}
+
+#endif
 	}
 }

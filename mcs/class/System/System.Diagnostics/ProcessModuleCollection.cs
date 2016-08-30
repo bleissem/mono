@@ -33,17 +33,22 @@ using System.Collections;
 
 namespace System.Diagnostics 
 {
-#if NET_2_1
+#if MOBILE
 	public class ProcessModuleCollectionBase : System.Collections.Generic.List<ProcessModule>
 	{
 		protected ProcessModuleCollectionBase InnerList {
 			get { return this; }
 		}
+
+		public System.Collections.IEnumerator GetEnumerator ()
+		{
+			return ((System.Collections.IEnumerable)InnerList).GetEnumerator ();
+		}
 	}
 #endif
 
 	public class ProcessModuleCollection :
-#if !NET_2_1	
+#if !MOBILE	
 		ReadOnlyCollectionBase
 #else
 		ProcessModuleCollectionBase
@@ -58,7 +63,6 @@ namespace System.Diagnostics
 			InnerList.AddRange (processModules);
 		}
 		
-#if !NET_2_1		
 		public ProcessModule this[int index] {
 			get {
 				return (ProcessModule)InnerList[index];
@@ -79,6 +83,5 @@ namespace System.Diagnostics
 		{
 			return InnerList.IndexOf (module);
 		}
-#endif
 	}
 }

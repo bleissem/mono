@@ -86,7 +86,7 @@ namespace System.IO
 
 		static DirectoryInfo CreateDirectoriesInternal (string path)
 		{
-#if !NET_2_1
+#if !MOBILE
 			if (SecurityManager.SecurityEnabled) {
 				new FileIOPermission (FileIOPermissionAccess.Read | FileIOPermissionAccess.Write, path).Demand ();
 			}
@@ -96,7 +96,7 @@ namespace System.IO
 				 info.Parent.Create ();
 
 			MonoIOError error;
-			if (!MonoIO.CreateDirectory (path, out error)) {
+			if (!MonoIO.CreateDirectory (info.FullName, out error)) {
 				// LAMESPEC: 1.1 and 1.2alpha allow CreateDirectory on a file path.
 				// So CreateDirectory ("/tmp/somefile") will succeed if 'somefile' is
 				// not a directory. However, 1.0 will throw an exception.
@@ -232,7 +232,7 @@ namespace System.IO
 			SecurityManager.EnsureElevatedPermissions (); // this is a no-op outside moonlight
 
 			string result = InsecureGetCurrentDirectory();
-#if !NET_2_1
+#if !MOBILE
 			if ((result != null) && (result.Length > 0) && SecurityManager.SecurityEnabled) {
 				new FileIOPermission (FileIOPermissionAccess.PathDiscovery, result).Demand ();
 			}
@@ -645,5 +645,28 @@ namespace System.IO
 						 AccessControlSections.Group |
 						 AccessControlSections.Access);
 		}
+
+#region Copied from reference source
+        internal static String GetDemandDir(string fullPath, bool thisDirOnly)
+        {
+            String demandPath;
+
+            if (thisDirOnly) {
+                if (fullPath.EndsWith( Path.DirectorySeparatorChar ) 
+                    || fullPath.EndsWith( Path.AltDirectorySeparatorChar ) )
+                    demandPath = fullPath + ".";
+                else
+                    demandPath = fullPath + Path.DirectorySeparatorCharAsString + ".";
+            }
+            else {
+                if (!(fullPath.EndsWith( Path.DirectorySeparatorChar ) 
+                    || fullPath.EndsWith( Path.AltDirectorySeparatorChar )) )
+                    demandPath = fullPath + Path.DirectorySeparatorCharAsString;
+                else
+                    demandPath = fullPath;
+            }
+            return demandPath;
+        }
+#endregion
 	}
 }

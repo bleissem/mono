@@ -89,18 +89,12 @@
 #define WSARecv wapi_WSARecv 
 #define WSASend wapi_WSASend 
 #define GetSystemInfo wapi_GetSystemInfo
-#define QueryPerformanceCounter wapi_QueryPerformanceCounter
-#define QueryPerformanceFrequency wapi_QueryPerformanceFrequency
-#define GetTickCount wapi_GetTickCount 
 #define GetFileVersionInfoSize wapi_GetFileVersionInfoSize 
 #define GetFileVersionInfo wapi_GetFileVersionInfo 
 #define VerQueryValue wapi_VerQueryValue 
 #define VerLanguageName wapi_VerLanguageName 
-#define WaitForSingleObject wapi_WaitForSingleObject
 #define WaitForSingleObjectEx wapi_WaitForSingleObjectEx
 #define SignalObjectAndWait wapi_SignalObjectAndWait
-#define WaitForMultipleObjects wapi_WaitForMultipleObjects
 #define WaitForMultipleObjectsEx wapi_WaitForMultipleObjectsEx
-#define WaitForInputIdle wapi_WaitForInputIdle
 
 #endif /* __WAPI_REMAP_H__ */

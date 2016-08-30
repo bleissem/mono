@@ -10,6 +10,7 @@
  * Copyright 2001-2003 Ximian, Inc (http://www.ximian.com)
  * Copyright 2004-2009 Novell, Inc (http://www.novell.com)
  * Copyright 2011 Xamarin Inc. (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include <config.h>
@@ -107,7 +108,7 @@ mono_mempool_new_size (int initial_size)
 		initial_size = MONO_MEMPOOL_MINSIZE;
 #endif
 
-	pool = g_malloc (initial_size);
+	pool = (MonoMemPool *)g_malloc (initial_size);
 
 	pool->next = NULL;
 	pool->pos = (guint8*)pool + SIZEOF_MEM_POOL; // Start after header
@@ -171,7 +172,7 @@ mono_mempool_stats (MonoMemPool *pool)
 {
 	MonoMemPool *p;
 	int count = 0;
-	guint32 still_free = pool->end - pool->pos;
+	guint32 still_free;
 
 	p = pool;
 	while (p) {
@@ -179,6 +180,7 @@ mono_mempool_stats (MonoMemPool *pool)
 		count++;
 	}
 	if (pool) {
+		still_free = pool->end - pool->pos;
 		g_print ("Mempool %p stats:\n", pool);
 		g_print ("Total mem allocated: %d\n", pool->d.allocated);
 		g_print ("Num chunks: %d\n", count);
@@ -202,11 +204,11 @@ mono_backtrace (int size)
         static gboolean inited;
 
         if (!inited) {
-            mono_mutex_init_recursive (&mempool_tracing_lock);
+            mono_os_mutex_init_recursive (&mempool_tracing_lock);
             inited = TRUE;
         }
 
-        mono_mutex_lock (&mempool_tracing_lock);
+        mono_os_mutex_lock (&mempool_tracing_lock);
         g_print ("Allocating %d bytes\n", size);
         symbols = backtrace (array, BACKTRACE_DEPTH);
         names = backtrace_symbols (array, symbols);
@@ -214,7 +216,7 @@ mono_backtrace (int size)
                 g_print ("\t%s\n", names [i]);
         }
         free (names);
-        mono_mutex_unlock (&mempool_tracing_lock);
+        mono_os_mutex_unlock (&mempool_tracing_lock);
 }
 
 #endif
@@ -277,7 +279,7 @@ mono_mempool_alloc (MonoMemPool *pool, guint size)
 		// (In individual allocation mode, the constant will be 0 and this path will always be taken)
 		if (size >= MONO_MEMPOOL_PREFER_INDIVIDUAL_ALLOCATION_SIZE) {
 			guint new_size = SIZEOF_MEM_POOL + size;
-			MonoMemPool *np = g_malloc (new_size);
+			MonoMemPool *np = (MonoMemPool *)g_malloc (new_size);
 
 			np->next = pool->next;
 			np->size = new_size;
@@ -289,7 +291,7 @@ mono_mempool_alloc (MonoMemPool *pool, guint size)
 		} else {
 			// Notice: any unused memory at the end of the old head becomes simply abandoned in this case until the mempool is freed (see Bugzilla #35136)
 			guint new_size = get_next_size (pool, size);
-			MonoMemPool *np = g_malloc (new_size);
+			MonoMemPool *np = (MonoMemPool *)g_malloc (new_size);
 
 			np->next = pool->next;
 			np->size = new_size;
@@ -373,7 +375,7 @@ mono_mempool_strdup (MonoMemPool *pool,
 		return NULL;
 
 	l = strlen (s);
-	res = mono_mempool_alloc (pool, l + 1);
+	res = (char *)mono_mempool_alloc (pool, l + 1);
 	memcpy (res, s, l + 1);
 
 	return res;

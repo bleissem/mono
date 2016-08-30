@@ -2523,7 +2523,6 @@ namespace Mono.CSharp
 
 		int TokenizePragmaWarningIdentifier (ref int c, ref bool identifier)
 		{
-
 			if ((c >= '0' && c <= '9') || is_identifier_start_character (c)) {
 				int number;
 
@@ -2548,7 +2547,7 @@ namespace Mono.CSharp
 						id_builder [pos] = (char)c;
 
 						if (c >= '0' && c <= '9') {
-							if (pos == 6 && id_builder [0] == 'C' && id_builder [1] == 'S') {
+							if (pos == 5 && id_builder [0] == 'C' && id_builder [1] == 'S') {
 								// Recognize CSXXXX as C# XXXX warning
 								number = 0;
 								int pow = 1000;
@@ -2587,6 +2586,9 @@ namespace Mono.CSharp
 				// skip over white space
 				while (c == ' ' || c == '\t')
 					c = get_char ();
+
+				if (c == '\n' || c == UnicodeLS || c == UnicodePS)
+					advance_line ();
 
 				return number;
 			}
@@ -4058,6 +4060,9 @@ namespace Mono.CSharp
 					--braces;
 					break;
 				case '\\':
+					if (parsing_string_interpolation_quoted != null && parsing_string_interpolation_quoted.Peek ())
+						break;
+
 					++col;
 					int surrogate;
 					ch = escape (ch, out surrogate);

@@ -185,7 +185,7 @@ namespace System.Net
 			}
 		}
 
-#if !NET_2_1
+#if !MOBILE
 		[MonoTODO]
 		public static new RequestCachePolicy DefaultCachePolicy
 		{
@@ -1168,7 +1168,7 @@ namespace System.Net
 		internal bool ChangeToSSLSocket (ref Stream stream) {
 #if SECURITY_DEP
 			var provider = MonoTlsProviderFactory.GetProviderInternal ();
-			var settings = new MSI.MonoTlsSettings ();
+			var settings = MSI.MonoTlsSettings.CopyDefaultSettings ();
 			settings.UseServicePointManagerCallback = true;
 			var sslStream = provider.CreateSslStream (stream, true, settings);
 			sslStream.AuthenticateAsClient (requestUri.Host, null, SslProtocols.Default, false);

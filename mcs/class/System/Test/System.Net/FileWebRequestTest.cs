@@ -25,6 +25,7 @@ using NUnit.Framework;
 namespace MonoTests.System.Net
 {
 	[TestFixture]
+	[Category ("RequiresBSDSockets")]
 	public class FileWebRequestTest
 	{
 		private string _tempDirectory;
@@ -660,7 +661,7 @@ namespace MonoTests.System.Net
 				Assert.AreEqual (typeof (ArgumentOutOfRangeException), ex.GetType (), "#3");
 				Assert.IsNotNull (ex.Message, "#4");
 				Assert.IsNotNull (ex.ParamName, "#5");
-				Assert.IsFalse (ex.ParamName == "value", "#6");
+				Assert.AreEqual ("value", ex.ParamName, "#6");
 				Assert.IsNull (ex.InnerException, "#7");
 			}
 		}

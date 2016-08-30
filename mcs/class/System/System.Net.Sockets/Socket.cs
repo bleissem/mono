@@ -123,7 +123,7 @@ namespace System.Net.Sockets
 				//
 				// Also note that catching ConfigurationErrorsException specifically would require library dependency
 				// System.Configuration, and wanted to avoid that.
-#if !NET_2_1
+#if !MOBILE
 #if CONFIGURATION_DEP
 				try {
 					SettingsSection config;
@@ -170,34 +170,6 @@ namespace System.Net.Sockets
 		
 		public Socket(AddressFamily addressFamily, SocketType socketType, ProtocolType protocolType)
 		{
-#if NET_2_1 && !MOBILE
-			switch (addressFamily) {
-			case AddressFamily.InterNetwork:    // ok
-			case AddressFamily.InterNetworkV6:  // ok
-			case AddressFamily.Unknown:         // SocketException will be thrown later (with right error #)
-				break;
-			// case AddressFamily.Unspecified:
-			default:
-				throw new ArgumentException ("addressFamily");
-			}
-
-			switch (socketType) {
-			case SocketType.Stream:             // ok
-			case SocketType.Unknown:            // SocketException will be thrown later (with right error #)
-				break;
-			default:
-				throw new ArgumentException ("socketType");
-			}
-
-			switch (protocolType) {
-			case ProtocolType.Tcp:              // ok
-			case ProtocolType.Unspecified:      // ok
-			case ProtocolType.Unknown:          // SocketException will be thrown later (with right error #)
-				break;
-			default:
-				throw new ArgumentException ("protocolType");
-			}
-#endif
 			this.address_family = addressFamily;
 			this.socket_type = socketType;
 			this.protocol_type = protocolType;
@@ -208,9 +180,7 @@ namespace System.Net.Sockets
 			if (error != 0)
 				throw new SocketException (error);
 
-#if !NET_2_1 || MOBILE
 			SocketDefaults ();
-#endif
 		}
 
 #if !MOBILE
@@ -289,7 +259,7 @@ namespace System.Net.Sockets
 			get { return ipv6_supported == 1; }
 		}
 
-#if NET_2_1
+#if MOBILE
 		public static bool OSSupportsIPv4 {
 			get { return ipv4_supported == 1; }
 		}
@@ -308,7 +278,7 @@ namespace System.Net.Sockets
 		}
 #endif
 
-#if NET_2_1
+#if MOBILE
 		public static bool OSSupportsIPv6 {
 			get { return ipv6_supported == 1; }
 		}
@@ -702,8 +672,8 @@ namespace System.Net.Sockets
 			set {
 				ThrowIfDisposedAndClosed ();
 
-				if (value < 0)
-					throw new ArgumentOutOfRangeException ("value", "The value specified for a set operation is less than zero");
+				if (value < 0 || value > 255)
+					throw new ArgumentOutOfRangeException ("value", "The value specified for a set operation is less than zero or greater than 255.");
 
 				switch (address_family) {
 				case AddressFamily.InterNetwork:
@@ -841,7 +811,7 @@ namespace System.Net.Sockets
 
 #region Poll
 
-		public bool Poll (int time_us, SelectMode mode)
+		public bool Poll (int microSeconds, SelectMode mode)
 		{
 			ThrowIfDisposedAndClosed ();
 
@@ -849,7 +819,7 @@ namespace System.Net.Sockets
 				throw new NotSupportedException ("'mode' parameter is not valid.");
 
 			int error;
-			bool result = Poll_internal (safe_handle, mode, time_us, out error);
+			bool result = Poll_internal (safe_handle, mode, microSeconds, out error);
 
 			if (error != 0)
 				throw new SocketException (error);
@@ -991,16 +961,20 @@ namespace System.Net.Sockets
 
 		static IOAsyncCallback BeginAcceptCallback = new IOAsyncCallback (ares => {
 			SocketAsyncResult sockares = (SocketAsyncResult) ares;
-			Socket socket = null;
-
+			Socket acc_socket = null;
 			try {
-				socket = sockares.socket.Accept ();
+				if (sockares.AcceptSocket == null) {
+					acc_socket = sockares.socket.Accept ();
+				} else {
+					acc_socket = sockares.AcceptSocket;
+					sockares.socket.Accept (acc_socket);
+				}
+
 			} catch (Exception e) {
 				sockares.Complete (e);
 				return;
 			}
-
-			sockares.Complete (socket);
+			sockares.Complete (acc_socket);
 		});
 
 		public IAsyncResult BeginAccept (int receiveSize, AsyncCallback callback, object state)
@@ -1141,22 +1115,27 @@ namespace System.Net.Sockets
 
 #region Bind
 
-		public void Bind (EndPoint local_end)
+		public void Bind (EndPoint localEP)
 		{
 			ThrowIfDisposedAndClosed ();
 
-			if (local_end == null)
-				throw new ArgumentNullException("local_end");
-
+			if (localEP == null)
+				throw new ArgumentNullException("localEP");
+				
+			var ipEndPoint = localEP as IPEndPoint;
+			if (ipEndPoint != null) {
+				localEP = RemapIPEndPoint (ipEndPoint);	
+			}
+			
 			int error;
-			Bind_internal (safe_handle, local_end.Serialize(), out error);
+			Bind_internal (safe_handle, localEP.Serialize(), out error);
 
 			if (error != 0)
 				throw new SocketException (error);
 			if (error == 0)
 				is_bound = true;
 
-			seed_endpoint = local_end;
+			seed_endpoint = localEP;
 		}
 
 		private static void Bind_internal (SafeSocketHandle safeHandle, SocketAddress sa, out int error)
@@ -1239,6 +1218,8 @@ namespace System.Net.Sockets
 			int error = 0;
 			foreach (IPAddress address in addresses) {
 				IPEndPoint iep = new IPEndPoint (address, port);
+				
+				iep = RemapIPEndPoint (iep);
 
 				Connect_internal (safe_handle, iep.Serialize (), out error);
 				if (error == 0) {
@@ -1283,6 +1264,10 @@ namespace System.Net.Sockets
 
 			if (is_listening)
 				throw new InvalidOperationException ();
+				
+			if (ep != null) {
+				remoteEP = RemapIPEndPoint (ep);
+			}
 
 			SocketAddress serial = remoteEP.Serialize ();
 
@@ -1313,7 +1298,7 @@ namespace System.Net.Sockets
 			if (e.RemoteEndPoint == null)
 				throw new ArgumentNullException ("remoteEP");
 
-			InitSocketAsyncEventArgs (e, ConnectAsyncCallback, e, SocketOperation.Connect);
+			InitSocketAsyncEventArgs (e, null, e, SocketOperation.Connect);
 
 			try {
 				IPAddress [] addresses;
@@ -1339,6 +1324,21 @@ namespace System.Net.Sockets
 			}
 
 			return true;
+		}
+
+		public static bool ConnectAsync (SocketType socketType, ProtocolType protocolType, SocketAsyncEventArgs e)
+		{
+			var sock = new Socket (e.RemoteEndPoint.AddressFamily, socketType, protocolType);
+			return sock.ConnectAsync (e);
+		}
+
+		public static void CancelConnectAsync (SocketAsyncEventArgs e)
+		{
+			if (e == null)
+				throw new ArgumentNullException("e");
+
+			if (e.in_progress != 0 && e.LastOperation == SocketAsyncOperation.Connect)
+				e.current_socket.Close();
 		}
 
 		static AsyncCallback ConnectAsyncCallback = new AsyncCallback (ares => {
@@ -1408,6 +1408,8 @@ namespace System.Net.Sockets
 					sockares.Complete (new SocketException ((int) SocketError.AddressNotAvailable), true);
 					return sockares;
 				}
+				
+				end_point = RemapIPEndPoint (ep);
 			}
 
 			int error = 0;
@@ -1730,14 +1732,14 @@ namespace System.Net.Sockets
 			return Receive (buffer, SocketFlags.None);
 		}
 
-		public int Receive (byte [] buffer, SocketFlags flags)
+		public int Receive (byte [] buffer, SocketFlags socketFlags)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, 0, buffer.Length);
 
 			SocketError error;
-			int ret = Receive_nochecks (buffer, 0, buffer.Length, flags, out error);
+			int ret = Receive_nochecks (buffer, 0, buffer.Length, socketFlags, out error);
 
 			if (error != SocketError.Success) {
 				if (error == SocketError.WouldBlock && is_blocking) // This might happen when ReceiveTimeout is set
@@ -1748,14 +1750,14 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Receive (byte [] buffer, int size, SocketFlags flags)
+		public int Receive (byte [] buffer, int size, SocketFlags socketFlags)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, 0, size);
 
 			SocketError error;
-			int ret = Receive_nochecks (buffer, 0, size, flags, out error);
+			int ret = Receive_nochecks (buffer, 0, size, socketFlags, out error);
 
 			if (error != SocketError.Success) {
 				if (error == SocketError.WouldBlock && is_blocking) // This might happen when ReceiveTimeout is set
@@ -1766,14 +1768,14 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Receive (byte [] buffer, int offset, int size, SocketFlags flags)
+		public int Receive (byte [] buffer, int offset, int size, SocketFlags socketFlags)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, offset, size);
 
 			SocketError error;
-			int ret = Receive_nochecks (buffer, offset, size, flags, out error);
+			int ret = Receive_nochecks (buffer, offset, size, socketFlags, out error);
 
 			if (error != SocketError.Success) {
 				if (error == SocketError.WouldBlock && is_blocking) // This might happen when ReceiveTimeout is set
@@ -1784,13 +1786,13 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Receive (byte [] buffer, int offset, int size, SocketFlags flags, out SocketError error)
+		public int Receive (byte [] buffer, int offset, int size, SocketFlags socketFlags, out SocketError errorCode)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, offset, size);
 
-			return Receive_nochecks (buffer, offset, size, flags, out error);
+			return Receive_nochecks (buffer, offset, size, socketFlags, out errorCode);
 		}
 
 		public int Receive (IList<ArraySegment<byte>> buffers)
@@ -2073,24 +2075,24 @@ namespace System.Net.Sockets
 			return ReceiveFrom (buffer, 0, buffer.Length, SocketFlags.None, ref remoteEP);
 		}
 
-		public int ReceiveFrom (byte [] buffer, SocketFlags flags, ref EndPoint remoteEP)
+		public int ReceiveFrom (byte [] buffer, SocketFlags socketFlags, ref EndPoint remoteEP)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 
-			return ReceiveFrom (buffer, 0, buffer.Length, flags, ref remoteEP);
+			return ReceiveFrom (buffer, 0, buffer.Length, socketFlags, ref remoteEP);
 		}
 
-		public int ReceiveFrom (byte [] buffer, int size, SocketFlags flags, ref EndPoint remoteEP)
+		public int ReceiveFrom (byte [] buffer, int size, SocketFlags socketFlags, ref EndPoint remoteEP)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, 0, size);
 
-			return ReceiveFrom (buffer, 0, size, flags, ref remoteEP);
+			return ReceiveFrom (buffer, 0, size, socketFlags, ref remoteEP);
 		}
 
-		public int ReceiveFrom (byte [] buffer, int offset, int size, SocketFlags flags, ref EndPoint remoteEP)
+		public int ReceiveFrom (byte [] buffer, int offset, int size, SocketFlags socketFlags, ref EndPoint remoteEP)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
@@ -2100,7 +2102,7 @@ namespace System.Net.Sockets
 				throw new ArgumentNullException ("remoteEP");
 
 			int error;
-			return ReceiveFrom_nochecks_exc (buffer, offset, size, flags, ref remoteEP, true, out error);
+			return ReceiveFrom_nochecks_exc (buffer, offset, size, socketFlags, ref remoteEP, true, out error);
 		}
 
 		public bool ReceiveFromAsync (SocketAsyncEventArgs e)
@@ -2323,14 +2325,14 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Send (byte [] buffer, SocketFlags flags)
+		public int Send (byte [] buffer, SocketFlags socketFlags)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, 0, buffer.Length);
 
 			SocketError error;
-			int ret = Send_nochecks (buffer, 0, buffer.Length, flags, out error);
+			int ret = Send_nochecks (buffer, 0, buffer.Length, socketFlags, out error);
 
 			if (error != SocketError.Success)
 				throw new SocketException ((int) error);
@@ -2338,14 +2340,14 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Send (byte [] buffer, int size, SocketFlags flags)
+		public int Send (byte [] buffer, int size, SocketFlags socketFlags)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, 0, size);
 
 			SocketError error;
-			int ret = Send_nochecks (buffer, 0, size, flags, out error);
+			int ret = Send_nochecks (buffer, 0, size, socketFlags, out error);
 
 			if (error != SocketError.Success)
 				throw new SocketException ((int) error);
@@ -2353,14 +2355,14 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Send (byte [] buffer, int offset, int size, SocketFlags flags)
+		public int Send (byte [] buffer, int offset, int size, SocketFlags socketFlags)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, offset, size);
 
 			SocketError error;
-			int ret = Send_nochecks (buffer, offset, size, flags, out error);
+			int ret = Send_nochecks (buffer, offset, size, socketFlags, out error);
 
 			if (error != SocketError.Success)
 				throw new SocketException ((int) error);
@@ -2368,13 +2370,13 @@ namespace System.Net.Sockets
 			return ret;
 		}
 
-		public int Send (byte [] buffer, int offset, int size, SocketFlags flags, out SocketError error)
+		public int Send (byte [] buffer, int offset, int size, SocketFlags socketFlags, out SocketError errorCode)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, offset, size);
 
-			return Send_nochecks (buffer, offset, size, flags, out error);
+			return Send_nochecks (buffer, offset, size, socketFlags, out errorCode);
 		}
 
 		public
@@ -2683,37 +2685,37 @@ namespace System.Net.Sockets
 
 #region SendTo
 
-		public int SendTo (byte [] buffer, EndPoint remote_end)
+		public int SendTo (byte [] buffer, EndPoint remoteEP)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 
-			return SendTo (buffer, 0, buffer.Length, SocketFlags.None, remote_end);
+			return SendTo (buffer, 0, buffer.Length, SocketFlags.None, remoteEP);
 		}
 
-		public int SendTo (byte [] buffer, SocketFlags flags, EndPoint remote_end)
+		public int SendTo (byte [] buffer, SocketFlags socketFlags, EndPoint remoteEP)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 
-			return SendTo (buffer, 0, buffer.Length, flags, remote_end);
+			return SendTo (buffer, 0, buffer.Length, socketFlags, remoteEP);
 		}
 
-		public int SendTo (byte [] buffer, int size, SocketFlags flags, EndPoint remote_end)
+		public int SendTo (byte [] buffer, int size, SocketFlags socketFlags, EndPoint remoteEP)
 		{
-			return SendTo (buffer, 0, size, flags, remote_end);
+			return SendTo (buffer, 0, size, socketFlags, remoteEP);
 		}
 
-		public int SendTo (byte [] buffer, int offset, int size, SocketFlags flags, EndPoint remote_end)
+		public int SendTo (byte [] buffer, int offset, int size, SocketFlags socketFlags, EndPoint remoteEP)
 		{
 			ThrowIfDisposedAndClosed ();
 			ThrowIfBufferNull (buffer);
 			ThrowIfBufferOutOfRange (buffer, offset, size);
 
-			if (remote_end == null)
-				throw new ArgumentNullException("remote_end");
+			if (remoteEP == null)
+				throw new ArgumentNullException("remoteEP");
 
-			return SendTo_nochecks (buffer, offset, size, flags, remote_end);
+			return SendTo_nochecks (buffer, offset, size, socketFlags, remoteEP);
 		}
 
 		public bool SendToAsync (SocketAsyncEventArgs e)
@@ -3025,12 +3027,12 @@ namespace System.Net.Sockets
 				throw new SocketException (error);
 		}
 
-		public byte [] GetSocketOption (SocketOptionLevel optionLevel, SocketOptionName optionName, int length)
+		public byte [] GetSocketOption (SocketOptionLevel optionLevel, SocketOptionName optionName, int optionLength)
 		{
 			ThrowIfDisposedAndClosed ();
 
 			int error;
-			byte[] byte_val = new byte [length];
+			byte[] byte_val = new byte [optionLength];
 			GetSocketOption_arr_internal (safe_handle, optionLevel, optionName, ref byte_val, out error);
 
 			if (error != 0)
@@ -3150,27 +3152,24 @@ namespace System.Net.Sockets
 
 		public void SetSocketOption (SocketOptionLevel optionLevel, SocketOptionName optionName, bool optionValue)
 		{
-			ThrowIfDisposedAndClosed ();
-
-			int error;
 			int int_val = optionValue ? 1 : 0;
-			SetSocketOption_internal (safe_handle, optionLevel, optionName, null, null, int_val, out error);
 
-			if (error != 0) {
-				if (error == (int) SocketError.InvalidArgument)
-					throw new ArgumentException ();
-				throw new SocketException (error);
-			}
+			SetSocketOption (optionLevel, optionName, int_val);
 		}
 
 		public void SetSocketOption (SocketOptionLevel optionLevel, SocketOptionName optionName, int optionValue)
 		{
 			ThrowIfDisposedAndClosed ();
 
+			if (optionLevel == SocketOptionLevel.Socket && optionName == SocketOptionName.ReuseAddress && optionValue != 0 && !SupportsPortReuse (protocol_type))
+				throw new SocketException ((int) SocketError.OperationNotSupported, "Operating system sockets do not support ReuseAddress.\nIf your socket is not intended to bind to the same address and port multiple times remove this option, otherwise you should ignore this exception inside a try catch and check that ReuseAddress is true before binding to the same address and port multiple times.");
+
 			int error;
 			SetSocketOption_internal (safe_handle, optionLevel, optionName, null, null, optionValue, out error);
 
 			if (error != 0) {
+				if (error == (int) SocketError.InvalidArgument)
+					throw new ArgumentException ();
 				throw new SocketException (error);
 			}
 		}
@@ -3194,13 +3193,13 @@ namespace System.Net.Sockets
 
 #region IOControl
 
-		public int IOControl (int ioctl_code, byte [] in_value, byte [] out_value)
+		public int IOControl (int ioControlCode, byte [] optionInValue, byte [] optionOutValue)
 		{
 			if (is_disposed)
 				throw new ObjectDisposedException (GetType ().ToString ());
 
 			int error;
-			int result = IOControl_internal (safe_handle, ioctl_code, in_value, out_value, out error);
+			int result = IOControl_internal (safe_handle, ioControlCode, optionInValue, optionOutValue, out error);
 
 			if (error != 0)
 				throw new SocketException (error);
@@ -3379,10 +3378,8 @@ namespace System.Net.Sockets
 
 		void ThrowIfUdp ()
 		{
-#if !NET_2_1 || MOBILE
 			if (protocol_type == ProtocolType.Udp)
 				throw new SocketException ((int)SocketError.ProtocolOption);
-#endif
 		}
 
 		SocketAsyncResult ValidateEndIAsyncResult (IAsyncResult ares, string methodName, string argName)
@@ -3414,7 +3411,9 @@ namespace System.Net.Sockets
 		void InitSocketAsyncEventArgs (SocketAsyncEventArgs e, AsyncCallback callback, object state, SocketOperation operation)
 		{
 			e.socket_async_result.Init (this, callback, state, operation);
-
+			if (e.AcceptSocket != null) {
+				e.socket_async_result.AcceptSocket = e.AcceptSocket;
+			}
 			e.current_socket = this;
 			e.SetLastOperation (SocketOperationToSocketAsyncOperation (operation));
 			e.SocketError = SocketError.Success;
@@ -3444,7 +3443,15 @@ namespace System.Net.Sockets
 				throw new NotImplementedException (String.Format ("Operation {0} is not implemented", op));
 			}
 		}
-
+		
+		IPEndPoint RemapIPEndPoint (IPEndPoint input) {
+			// If socket is DualMode ensure we automatically handle mapping IPv4 addresses to IPv6.
+			if (IsDualMode && input.AddressFamily == AddressFamily.InterNetwork)
+				return new IPEndPoint (input.Address.MapToIPv6 (), input.Port);
+			
+			return input;
+		}
+		
 		[StructLayout (LayoutKind.Sequential)]
 		struct WSABUF {
 			public int len;
@@ -3455,7 +3462,7 @@ namespace System.Net.Sockets
 		internal static extern void cancel_blocking_socket_operation (Thread thread);
 
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
-		internal static extern bool SupportsPortReuse ();
+		internal static extern bool SupportsPortReuse (ProtocolType proto);
 	}
 }
 

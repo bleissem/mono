@@ -480,7 +480,7 @@ namespace System.Net
 							AsyncCallback cb, object state)
 		{
 			if (request.Aborted)
-				throw new WebException ("The request was canceled.", null, WebExceptionStatus.RequestCanceled);
+				throw new WebException ("The request was canceled.", WebExceptionStatus.RequestCanceled);
 
 			if (isRead)
 				throw new NotSupportedException ("this stream does not allow writing");
@@ -675,7 +675,7 @@ namespace System.Net
 				} catch (WebException e) {
 					result.SetCompleted (false, e);
 				} catch (Exception e) {
-					result.SetCompleted (false, new WebException ("Error writing headers", e, WebExceptionStatus.SendFailure));
+					result.SetCompleted (false, new WebException ("Error writing headers", WebExceptionStatus.SendFailure, WebExceptionInternalStatus.RequestFatal, e));
 				}
 			}, null);
 
@@ -719,12 +719,12 @@ namespace System.Net
 
 			SetHeadersAsync (true, inner => {
 				if (inner.GotException) {
-					result.SetCompleted (inner.CompletedSynchronously, inner.Exception);
+					result.SetCompleted (inner.CompletedSynchronouslyPeek, inner.Exception);
 					return;
 				}
 
 				if (cnc.Data.StatusCode != 0 && cnc.Data.StatusCode != 100) {
-					result.SetCompleted (inner.CompletedSynchronously);
+					result.SetCompleted (inner.CompletedSynchronouslyPeek);
 					return;
 				}
 
@@ -735,7 +735,7 @@ namespace System.Net
 
 				if (length == 0) {
 					complete_request_written = true;
-					result.SetCompleted (inner.CompletedSynchronously);
+					result.SetCompleted (inner.CompletedSynchronouslyPeek);
 					return;
 				}
 
@@ -814,7 +814,7 @@ namespace System.Net
 				IOException io = new IOException ("Cannot close the stream until all bytes are written");
 				nextReadCalled = true;
 				cnc.Close (true);
-				throw new WebException ("Request was cancelled.", io, WebExceptionStatus.RequestCanceled);
+				throw new WebException ("Request was cancelled.", WebExceptionStatus.RequestCanceled, WebExceptionInternalStatus.RequestFatal, io);
 			}
 
 			// Commented out the next line to fix xamarin bug #1512

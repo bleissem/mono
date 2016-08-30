@@ -17,16 +17,21 @@ Output defines:
 
 HAS_CROSS_COMPILER_OFFSETS - if set, it means we found some cross offsets, it doesnt mean we'll use it.
 USED_CROSS_COMPILER_OFFSETS - if set, it means we used the cross offsets
+
+Environment defines (from config.h and CFLAGS):
+
+MONO_GENERATING_OFFSETS - Set by an offsets generating tool to disable the usage of any (possibly non-existing) generated header.
+MONO_OFFSETS_FILE - Name of the header file containing the offsets to be used.
+
 */
 
 
 #undef HAS_CROSS_COMPILER_OFFSETS
 #undef USED_CROSS_COMPILER_OFFSETS
 
-#ifdef ENABLE_EXTENSION_MODULE
-#include "../../../mono-extensions/mono/metadata/object-offsets.h"
+#if !defined (MONO_GENERATING_OFFSETS) && defined (MONO_OFFSETS_FILE)
+#include MONO_OFFSETS_FILE
 #endif
-
 
 #ifndef USED_CROSS_COMPILER_OFFSETS
 
@@ -38,10 +43,20 @@ DECL_ALIGN(float)
 DECL_ALIGN(double)
 DECL_ALIGN(gpointer)
 
+DECL_SIZE(gint8)
+DECL_SIZE(gint16)
+DECL_SIZE(gint32)
+DECL_SIZE(gint64)
+DECL_SIZE(float)
+DECL_SIZE(double)
+DECL_SIZE(gpointer)
+
 #ifndef DISABLE_METADATA_OFFSETS
 //object offsets
 DECL_OFFSET(MonoObject, vtable)
 DECL_OFFSET(MonoObject, synchronisation)
+
+DECL_OFFSET(MonoObjectHandlePayload, __obj)
 
 DECL_OFFSET(MonoClass, interface_bitmap)
 DECL_OFFSET(MonoClass, byval_arg)
@@ -72,7 +87,7 @@ DECL_OFFSET(MonoDelegate, invoke_impl)
 DECL_OFFSET(MonoDelegate, method)
 DECL_OFFSET(MonoDelegate, method_code)
 DECL_OFFSET(MonoDelegate, method_is_virtual)
-DECL_OFFSET(MonoDelegate, rgctx)
+DECL_OFFSET(MonoDelegate, extra_arg)
 
 DECL_OFFSET(MonoInternalThread, tid)
 DECL_OFFSET(MonoInternalThread, small_id)
@@ -116,8 +131,9 @@ DECL_OFFSET(MonoTypedRef, value)
 DECL_OFFSET(MonoThreadsSync, status)
 DECL_OFFSET(MonoThreadsSync, nest)
 
-#if defined (HAVE_SGEN_GC) && !defined (HAVE_KW_THREAD)
-DECL_OFFSET(SgenThreadInfo, tlab_next_addr)
+#ifdef HAVE_SGEN_GC
+DECL_OFFSET(SgenClientThreadInfo, in_critical_region)
+DECL_OFFSET(SgenThreadInfo, tlab_next)
 DECL_OFFSET(SgenThreadInfo, tlab_temp_end)
 #endif
 
@@ -172,10 +188,6 @@ DECL_OFFSET(MonoLMF, eip)
 DECL_OFFSET(MonoContext, gregs)
 DECL_OFFSET(MonoContext, fregs)
 
-#ifdef TARGET_WIN32
-DECL_OFFSET(MonoLMF, lmf_addr)
-#endif
-
 DECL_OFFSET(MonoLMF, rsp)
 DECL_OFFSET(MonoLMF, rbp)
 DECL_OFFSET(MonoLMF, rip)
@@ -217,6 +229,18 @@ DECL_OFFSET(DynCallArgs, res2)
 
 #if defined(TARGET_ARM)
 DECL_OFFSET(MonoLMF, method)
+DECL_OFFSET(GSharedVtCallInfo, stack_usage)
+DECL_OFFSET(GSharedVtCallInfo, vret_arg_reg)
+DECL_OFFSET(GSharedVtCallInfo, ret_marshal)
+DECL_OFFSET(GSharedVtCallInfo, vret_slot)
+DECL_OFFSET(GSharedVtCallInfo, gsharedvt_in)
+#endif
+
+#if defined(TARGET_ARM64)
+DECL_OFFSET(GSharedVtCallInfo, stack_usage)
+DECL_OFFSET(GSharedVtCallInfo, gsharedvt_in)
+DECL_OFFSET(GSharedVtCallInfo, ret_marshal)
+DECL_OFFSET(GSharedVtCallInfo, vret_slot)
 #endif
 
 #if defined(TARGET_AMD64) || defined(TARGET_ARM64)
@@ -235,4 +259,6 @@ DECL_OFFSET(SeqPointInfo, bp_addrs)
 #undef DECL_OFFSET2
 #undef DECL_ALIGN
 #undef DECL_ALIGN2
+#undef DECL_SIZE
+#undef DECL_SIZE2
 #undef USE_CROSS_COMPILE_OFFSETS

@@ -5,6 +5,7 @@
  *   Paolo Molaro (lupus@xamarin.com)
  *
  * Copyright 2013 Xamarin Inc (http://www.xamarin.com)
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifndef __MONO_G_HASH_H__
@@ -13,11 +14,11 @@
 #include <mono/metadata/mono-gc.h>
 
 MONO_BEGIN_DECLS
-
+/* do not change the values of this enum */
 typedef enum {
-	MONO_HASH_KEY_GC,
-	MONO_HASH_VALUE_GC,
-	MONO_HASH_KEY_VALUE_GC
+	MONO_HASH_KEY_GC = 1,
+	MONO_HASH_VALUE_GC = 2,
+	MONO_HASH_KEY_VALUE_GC = MONO_HASH_KEY_GC | MONO_HASH_VALUE_GC,
 } MonoGHashGCType;
 
 typedef struct _MonoGHashTable MonoGHashTable;

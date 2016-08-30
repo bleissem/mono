@@ -5,18 +5,28 @@
  * Copyright 2003-2010 Novell, Inc.
  * Copyright (C) 2012 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
+ */
+
+/*
+ * Defines
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ *     GCObject* copy_object_no_checks (GCObject *obj, SgenGrayQueue *queue)
  *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * which allocates new space for `obj`, copies it there, forwards `obj` to its new location,
+ * and enqueues the copy into `queue`.
+ *
+ * To be defined by the includer:
+ *
+ *     COLLECTOR_SERIAL_ALLOC_FOR_PROMOTION(vt, obj, objsize, has_refs)
+ *
+ * Allocates space for promoting object `obj`, with size `objsize`, and initizializes the
+ * vtable with `vt`.  `has_refs` indicates whether the object contains references.
+ *
+ *     collector_pin_object(obj, queue)
+ *
+ * Called when no space for `obj` could be allocated.  It must pin `obj` and enqueue it into
+ * `queue` for scanning.
  */
 
 extern guint64 stat_copy_object_called_nursery;
@@ -50,15 +60,15 @@ par_copy_object_no_checks (char *destination, GCVTable vt, void *obj, mword objs
 	obj = destination;
 	if (queue) {
 		SGEN_LOG (9, "Enqueuing gray object %p (%s)", obj, sgen_client_vtable_get_name (vt));
-		GRAY_OBJECT_ENQUEUE (queue, obj, sgen_vtable_get_descriptor (vt));
+		GRAY_OBJECT_ENQUEUE (queue, (GCObject *)obj, sgen_vtable_get_descriptor (vt));
 	}
 }
 
 /*
  * This can return OBJ itself on OOM.
  */
-static MONO_NEVER_INLINE void*
-copy_object_no_checks (void *obj, SgenGrayQueue *queue)
+static MONO_NEVER_INLINE GCObject *
+copy_object_no_checks (GCObject *obj, SgenGrayQueue *queue)
 {
 	GCVTable vt = SGEN_LOAD_VTABLE_UNCHECKED (obj);
 	gboolean has_references = SGEN_VTABLE_HAS_REFERENCES (vt);
@@ -76,11 +86,14 @@ copy_object_no_checks (void *obj, SgenGrayQueue *queue)
 	if (!has_references)
 		queue = NULL;
 
-	par_copy_object_no_checks (destination, vt, obj, objsize, queue);
+	par_copy_object_no_checks ((char *)destination, vt, obj, objsize, queue);
 	/* FIXME: mark mod union cards if necessary */
 
 	/* set the forwarding pointer */
 	SGEN_FORWARD_OBJECT (obj, destination);
 
-	return destination;
+	return (GCObject *)destination;
 }
+
+#undef COLLECTOR_SERIAL_ALLOC_FOR_PROMOTION
+#undef collector_pin_object

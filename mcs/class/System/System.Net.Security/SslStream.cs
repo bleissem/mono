@@ -24,11 +24,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#if SECURITY_DEP && !MONO_FEATURE_NEW_TLS
+#if !MONO_FEATURE_NEW_TLS
+#if SECURITY_DEP
 
-#if MONO_X509_ALIAS
-extern alias PrebuiltSystem;
-#endif
 #if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 #endif
@@ -37,13 +35,6 @@ extern alias MonoSecurity;
 using MonoSecurity::Mono.Security.Interface;
 #else
 using Mono.Security.Interface;
-#endif
-#if MONO_X509_ALIAS
-using XSslProtocols = PrebuiltSystem::System.Security.Authentication.SslProtocols;
-using XX509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-#else
-using XSslProtocols = System.Security.Authentication.SslProtocols;
-using XX509CertificateCollection = System.Security.Cryptography.X509Certificates.X509CertificateCollection;
 #endif
 
 using CipherAlgorithmType = System.Security.Authentication.CipherAlgorithmType;
@@ -79,18 +70,26 @@ namespace System.Net.Security
 
 	internal delegate X509Certificate LocalCertSelectionCallback (
 		string targetHost,
-		XX509CertificateCollection localCertificates,
+		X509CertificateCollection localCertificates,
 		X509Certificate remoteCertificate,
 		string[] acceptableIssuers);
 
 	public class SslStream : AuthenticatedStream, MNS.IMonoSslStream
 	{
-		MonoSslStream impl;
+		MonoTlsProvider provider;
+		IMonoSslStream impl;
 
-		internal MonoSslStream Impl {
+		internal IMonoSslStream Impl {
 			get {
 				CheckDisposed ();
 				return impl;
+			}
+		}
+
+		internal MonoTlsProvider Provider {
+			get {
+				CheckDisposed ();
+				return provider;
 			}
 		}
 
@@ -107,7 +106,7 @@ namespace System.Net.Security
 		public SslStream (Stream innerStream, bool leaveInnerStreamOpen)
 			: base (innerStream, leaveInnerStreamOpen)
 		{
-			var provider = GetProvider ();
+			provider = GetProvider ();
 			impl = provider.CreateSslStream (innerStream, leaveInnerStreamOpen);
 		}
 
@@ -119,14 +118,20 @@ namespace System.Net.Security
 		public SslStream (Stream innerStream, bool leaveInnerStreamOpen, RemoteCertificateValidationCallback userCertificateValidationCallback, LocalCertificateSelectionCallback userCertificateSelectionCallback)
 			: base (innerStream, leaveInnerStreamOpen)
 		{
-			var provider = GetProvider ();
-			var settings = new MonoTlsSettings ();
+			provider = GetProvider ();
+			var settings = MonoTlsSettings.CopyDefaultSettings ();
 			settings.RemoteCertificateValidationCallback = MNS.Private.CallbackHelpers.PublicToMono (userCertificateValidationCallback);
 			settings.ClientCertificateSelectionCallback = MNS.Private.CallbackHelpers.PublicToMono (userCertificateSelectionCallback);
 			impl = provider.CreateSslStream (innerStream, leaveInnerStreamOpen, settings);
 		}
 
-		internal SslStream (Stream innerStream, bool leaveInnerStreamOpen, MonoSslStream impl)
+		[MonoLimitation ("encryptionPolicy is ignored")]
+		public SslStream (Stream innerStream, bool leaveInnerStreamOpen, RemoteCertificateValidationCallback userCertificateValidationCallback, LocalCertificateSelectionCallback userCertificateSelectionCallback, EncryptionPolicy encryptionPolicy)
+		: this (innerStream, leaveInnerStreamOpen, userCertificateValidationCallback, userCertificateSelectionCallback)
+		{
+		}
+
+		internal SslStream (Stream innerStream, bool leaveInnerStreamOpen, IMonoSslStream impl)
 			: base (innerStream, leaveInnerStreamOpen)
 		{
 			this.impl = impl;
@@ -137,9 +142,9 @@ namespace System.Net.Security
 			Impl.AuthenticateAsClient (targetHost);
 		}
 
-		public virtual void AuthenticateAsClient (string targetHost, XX509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
+		public virtual void AuthenticateAsClient (string targetHost, X509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			Impl.AuthenticateAsClient (targetHost, (XX509CertificateCollection)(object)clientCertificates, (XSslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			Impl.AuthenticateAsClient (targetHost, clientCertificates, enabledSslProtocols, checkCertificateRevocation);
 		}
 
 		// [HostProtection (ExternalThreading=true)]
@@ -149,9 +154,9 @@ namespace System.Net.Security
 		}
 
 		// [HostProtection (ExternalThreading=true)]
-		public virtual IAsyncResult BeginAuthenticateAsClient (string targetHost, XX509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
+		public virtual IAsyncResult BeginAuthenticateAsClient (string targetHost, X509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
 		{
-			return Impl.BeginAuthenticateAsClient (targetHost, (XX509CertificateCollection)(object)clientCertificates, (XSslProtocols)enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
+			return Impl.BeginAuthenticateAsClient (targetHost, clientCertificates, enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
 		}
 
 		public virtual void EndAuthenticateAsClient (IAsyncResult asyncResult)
@@ -166,7 +171,7 @@ namespace System.Net.Security
 
 		public virtual void AuthenticateAsServer (X509Certificate serverCertificate, bool clientCertificateRequired, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			Impl.AuthenticateAsServer (serverCertificate, clientCertificateRequired, (XSslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			Impl.AuthenticateAsServer (serverCertificate, clientCertificateRequired, enabledSslProtocols, checkCertificateRevocation);
 		}
 
 		// [HostProtection (ExternalThreading=true)]
@@ -177,7 +182,7 @@ namespace System.Net.Security
 
 		public virtual IAsyncResult BeginAuthenticateAsServer (X509Certificate serverCertificate, bool clientCertificateRequired, SslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
 		{
-			return Impl.BeginAuthenticateAsServer (serverCertificate, clientCertificateRequired, (XSslProtocols)enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
+			return Impl.BeginAuthenticateAsServer (serverCertificate, clientCertificateRequired, enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
 		}
 
 		public virtual void EndAuthenticateAsServer (IAsyncResult asyncResult)
@@ -197,9 +202,9 @@ namespace System.Net.Security
 			return Impl.AuthenticateAsClientAsync (targetHost);
 		}
 
-		public virtual Task AuthenticateAsClientAsync (string targetHost, XX509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
+		public virtual Task AuthenticateAsClientAsync (string targetHost, X509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			return Impl.AuthenticateAsClientAsync (targetHost, clientCertificates, (XSslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			return Impl.AuthenticateAsClientAsync (targetHost, clientCertificates, enabledSslProtocols, checkCertificateRevocation);
 		}
 
 		public virtual Task AuthenticateAsServerAsync (X509Certificate serverCertificate)
@@ -209,7 +214,7 @@ namespace System.Net.Security
 
 		public virtual Task AuthenticateAsServerAsync (X509Certificate serverCertificate, bool clientCertificateRequired, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			return Impl.AuthenticateAsServerAsync (serverCertificate, clientCertificateRequired, (XSslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			return Impl.AuthenticateAsServerAsync (serverCertificate, clientCertificateRequired, enabledSslProtocols, checkCertificateRevocation);
 		}
 
 		public override bool IsAuthenticated {
@@ -331,7 +336,7 @@ namespace System.Net.Security
 		void CheckDisposed ()
 		{
 			if (impl == null)
-				throw new ObjectDisposedException ("MonoSslStream");
+				throw new ObjectDisposedException ("SslStream");
 		}
 
 		protected override void Dispose (bool disposing)
@@ -386,7 +391,24 @@ namespace System.Net.Security
 		AuthenticatedStream MNS.IMonoSslStream.AuthenticatedStream {
 			get { return this; }
 		}
+
+		MonoTlsProvider MNS.IMonoSslStream.Provider {
+			get { return provider; }
+		}
+
+		MonoTlsConnectionInfo MNS.IMonoSslStream.GetConnectionInfo ()
+		{
+			return Impl.GetConnectionInfo ();
+		}
 	}
 }
+#else // !SECURITY_DEP
+namespace System.Net.Security
+{
+	public class SslStream
+	{
+	}
+}
+#endif
 
 #endif

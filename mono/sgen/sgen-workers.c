@@ -5,18 +5,7 @@
  * Copyright 2003-2010 Novell, Inc.
  * Copyright (C) 2012 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #include "config.h"
@@ -31,6 +20,7 @@
 #include "mono/sgen/sgen-client.h"
 
 static int workers_num;
+static volatile gboolean forced_stop;
 static WorkerData *workers_data;
 
 static SgenSectionGrayQueue workers_distribute_gray_queue;
@@ -63,6 +53,7 @@ typedef gint32 State;
 static volatile State workers_state;
 
 static SgenObjectOperations * volatile idle_func_object_ops;
+static SgenThreadPoolJob * volatile preclean_job;
 
 static guint64 stat_workers_num_finished;
 
@@ -86,7 +77,7 @@ state_is_working_or_enqueued (State state)
 	return state == STATE_WORKING || state == STATE_WORK_ENQUEUED;
 }
 
-void
+static void
 sgen_workers_ensure_awake (void)
 {
 	State old_state;
@@ -122,6 +113,8 @@ worker_try_finish (void)
 
 		/* We are the last thread to go to sleep. */
 	} while (!set_state (old_state, STATE_NOT_WORKING));
+
+	binary_protocol_worker_finish (sgen_timestamp (), forced_stop);
 }
 
 void
@@ -184,13 +177,14 @@ static void
 init_private_gray_queue (WorkerData *data)
 {
 	sgen_gray_object_queue_init (&data->private_gray_queue,
-			sgen_get_major_collector ()->is_concurrent ? concurrent_enqueue_check : NULL);
+			sgen_get_major_collector ()->is_concurrent ? concurrent_enqueue_check : NULL,
+			FALSE);
 }
 
 static void
 thread_pool_init_func (void *data_untyped)
 {
-	WorkerData *data = data_untyped;
+	WorkerData *data = (WorkerData *)data_untyped;
 	SgenMajorCollector *major = sgen_get_major_collector ();
 
 	sgen_client_thread_register_worker ();
@@ -210,7 +204,7 @@ continue_idle_func (void)
 static void
 marker_idle_func (void *data_untyped)
 {
-	WorkerData *data = data_untyped;
+	WorkerData *data = (WorkerData *)data_untyped;
 
 	SGEN_ASSERT (0, continue_idle_func (), "Why are we called when we're not supposed to work?");
 	SGEN_ASSERT (0, sgen_concurrent_collection_in_progress (), "The worker should only mark in concurrent collections.");
@@ -220,14 +214,20 @@ marker_idle_func (void *data_untyped)
 		SGEN_ASSERT (0, workers_state != STATE_NOT_WORKING, "How did we get from WORK ENQUEUED to NOT WORKING?");
 	}
 
-	if (!sgen_gray_object_queue_is_empty (&data->private_gray_queue) || workers_get_work (data)) {
+	if (!forced_stop && (!sgen_gray_object_queue_is_empty (&data->private_gray_queue) || workers_get_work (data))) {
 		ScanCopyContext ctx = CONTEXT_FROM_OBJECT_OPERATIONS (idle_func_object_ops, &data->private_gray_queue);
 
 		SGEN_ASSERT (0, !sgen_gray_object_queue_is_empty (&data->private_gray_queue), "How is our gray queue empty if we just got work?");
 
 		sgen_drain_gray_stack (ctx);
 	} else {
-		worker_try_finish ();
+		SgenThreadPoolJob *job = preclean_job;
+		if (job) {
+			sgen_thread_pool_job_enqueue (job);
+			preclean_job = NULL;
+		} else {
+			worker_try_finish ();
+		}
 	}
 }
 
@@ -257,7 +257,7 @@ void
 sgen_workers_init (int num_workers)
 {
 	int i;
-	void **workers_data_ptrs = alloca(num_workers * sizeof(void *));
+	void **workers_data_ptrs = (void **)alloca(num_workers * sizeof(void *));
 
 	if (!sgen_get_major_collector ()->is_concurrent) {
 		sgen_thread_pool_init (num_workers, thread_pool_init_func, NULL, NULL, NULL);
@@ -268,7 +268,7 @@ sgen_workers_init (int num_workers)
 
 	workers_num = num_workers;
 
-	workers_data = sgen_alloc_internal_dynamic (sizeof (WorkerData) * num_workers, INTERNAL_MEM_WORKER_DATA, TRUE);
+	workers_data = (WorkerData *)sgen_alloc_internal_dynamic (sizeof (WorkerData) * num_workers, INTERNAL_MEM_WORKER_DATA, TRUE);
 	memset (workers_data, 0, sizeof (WorkerData) * num_workers);
 
 	init_distribute_gray_queue ();
@@ -282,9 +282,23 @@ sgen_workers_init (int num_workers)
 }
 
 void
-sgen_workers_start_all_workers (SgenObjectOperations *object_ops)
+sgen_workers_stop_all_workers (void)
 {
+	preclean_job = NULL;
+	mono_memory_write_barrier ();
+	forced_stop = TRUE;
+
+	sgen_thread_pool_wait_for_all_jobs ();
+	sgen_thread_pool_idle_wait ();
+	SGEN_ASSERT (0, workers_state == STATE_NOT_WORKING, "Can only signal enqueue work when in no work state");
+}
+
+void
+sgen_workers_start_all_workers (SgenObjectOperations *object_ops, SgenThreadPoolJob *job)
+{
+	forced_stop = FALSE;
 	idle_func_object_ops = object_ops;
+	preclean_job = job;
 	mono_memory_write_barrier ();
 
 	sgen_workers_ensure_awake ();
@@ -306,6 +320,28 @@ sgen_workers_join (void)
 		SGEN_ASSERT (0, sgen_gray_object_queue_is_empty (&workers_data [i].private_gray_queue), "Why is there still work left to do?");
 }
 
+/*
+ * Can only be called if the workers are stopped.
+ * If we're stopped, there are also no pending jobs.
+ */
+gboolean
+sgen_workers_have_idle_work (void)
+{
+	int i;
+
+	SGEN_ASSERT (0, forced_stop && sgen_workers_all_done (), "Checking for idle work should only happen if the workers are stopped.");
+
+	if (!sgen_section_gray_queue_is_empty (&workers_distribute_gray_queue))
+		return TRUE;
+
+	for (i = 0; i < workers_num; ++i) {
+		if (!sgen_gray_object_queue_is_empty (&workers_data [i].private_gray_queue))
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
 gboolean
 sgen_workers_all_done (void)
 {
@@ -320,16 +356,28 @@ sgen_workers_are_working (void)
 }
 
 void
-sgen_workers_wait (void)
+sgen_workers_assert_gray_queue_is_empty (void)
 {
-	sgen_thread_pool_idle_wait ();
-	SGEN_ASSERT (0, sgen_workers_all_done (), "Why are the workers not done after we wait for them?");
+	SGEN_ASSERT (0, sgen_section_gray_queue_is_empty (&workers_distribute_gray_queue), "Why is the workers gray queue not empty?");
 }
 
-SgenSectionGrayQueue*
-sgen_workers_get_distribute_section_gray_queue (void)
+void
+sgen_workers_take_from_queue_and_awake (SgenGrayQueue *queue)
 {
-	return &workers_distribute_gray_queue;
+	gboolean wake = FALSE;
+
+	for (;;) {
+		GrayQueueSection *section = sgen_gray_object_dequeue_section (queue);
+		if (!section)
+			break;
+		sgen_section_gray_queue_enqueue (&workers_distribute_gray_queue, section);
+		wake = TRUE;
+	}
+
+	if (wake) {
+		SGEN_ASSERT (0, sgen_concurrent_collection_in_progress (), "Why is there work to take when there's no concurrent collection in progress?");
+		sgen_workers_ensure_awake ();
+	}
 }
 
 #endif

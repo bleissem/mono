@@ -5,18 +5,7 @@
  * Copyright 2003-2010 Novell, Inc.
  * Copyright (C) 2012 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 #include "config.h"
 #ifdef HAVE_SGEN_GC
@@ -49,6 +38,12 @@ guint64 stat_gray_queue_dequeue_slow_path;
 #define STATE_ASSERT(s,v)
 #endif
 
+/*
+ * Whenever we dispose a gray queue, we save its free list.  Then, in the next collection,
+ * we reuse that free list for the new gray queue.
+ */
+static GrayQueueSection *last_gray_queue_free_list;
+
 void
 sgen_gray_object_alloc_queue_section (SgenGrayQueue *queue)
 {
@@ -66,7 +61,7 @@ sgen_gray_object_alloc_queue_section (SgenGrayQueue *queue)
 		STATE_TRANSITION (section, GRAY_QUEUE_SECTION_STATE_FREE_LIST, GRAY_QUEUE_SECTION_STATE_FLOATING);
 	} else {
 		/* Allocate a new section */
-		section = sgen_alloc_internal (INTERNAL_MEM_GRAY_QUEUE);
+		section = (GrayQueueSection *)sgen_alloc_internal (INTERNAL_MEM_GRAY_QUEUE);
 		STATE_SET (section, GRAY_QUEUE_SECTION_STATE_FLOATING);
 	}
 
@@ -223,48 +218,40 @@ sgen_gray_object_queue_trim_free_list (SgenGrayQueue *queue)
 }
 
 void
-sgen_gray_object_queue_init (SgenGrayQueue *queue, GrayQueueEnqueueCheckFunc enqueue_check_func)
+sgen_gray_object_queue_init (SgenGrayQueue *queue, GrayQueueEnqueueCheckFunc enqueue_check_func, gboolean reuse_free_list)
 {
-	g_assert (sgen_gray_object_queue_is_empty (queue));
+	memset (queue, 0, sizeof (SgenGrayQueue));
 
-	queue->alloc_prepare_func = NULL;
-	queue->alloc_prepare_data = NULL;
 #ifdef SGEN_CHECK_GRAY_OBJECT_ENQUEUE
 	queue->enqueue_check_func = enqueue_check_func;
 #endif
 
+	if (reuse_free_list) {
+		queue->free_list = last_gray_queue_free_list;
+		last_gray_queue_free_list = NULL;
+	}
+}
+
+void
+sgen_gray_object_queue_dispose (SgenGrayQueue *queue)
+{
+	SGEN_ASSERT (0, sgen_gray_object_queue_is_empty (queue), "Why are we disposing a gray queue that's not empty?");
+
 	/* Free the extra sections allocated during the last collection */
 	sgen_gray_object_queue_trim_free_list (queue);
-}
 
-static void
-invalid_prepare_func (SgenGrayQueue *queue)
-{
-	g_assert_not_reached ();
-}
+	SGEN_ASSERT (0, !last_gray_queue_free_list, "Are we disposing two gray queues after another?");
+	last_gray_queue_free_list = queue->free_list;
 
-void
-sgen_gray_object_queue_init_invalid (SgenGrayQueue *queue)
-{
-	sgen_gray_object_queue_init (queue, NULL);
-	queue->alloc_prepare_func = invalid_prepare_func;
-	queue->alloc_prepare_data = NULL;
+	/* just to make sure */
+	memset (queue, 0, sizeof (SgenGrayQueue));
 }
 
 void
-sgen_gray_queue_set_alloc_prepare (SgenGrayQueue *queue, GrayQueueAllocPrepareFunc alloc_prepare_func, void *data)
+sgen_gray_queue_set_alloc_prepare (SgenGrayQueue *queue, GrayQueueAllocPrepareFunc alloc_prepare_func)
 {
-	SGEN_ASSERT (0, !queue->alloc_prepare_func && !queue->alloc_prepare_data, "Can't set gray queue alloc-prepare twice");
+	SGEN_ASSERT (0, !queue->alloc_prepare_func, "Can't set gray queue alloc-prepare twice");
 	queue->alloc_prepare_func = alloc_prepare_func;
-	queue->alloc_prepare_data = data;
-}
-
-void
-sgen_gray_object_queue_init_with_alloc_prepare (SgenGrayQueue *queue, GrayQueueEnqueueCheckFunc enqueue_check_func,
-		GrayQueueAllocPrepareFunc alloc_prepare_func, void *data)
-{
-	sgen_gray_object_queue_init (queue, enqueue_check_func);
-	sgen_gray_queue_set_alloc_prepare (queue, alloc_prepare_func, data);
 }
 
 void
@@ -279,20 +266,13 @@ sgen_gray_object_queue_deinit (SgenGrayQueue *queue)
 	}
 }
 
-void
-sgen_gray_object_queue_disable_alloc_prepare (SgenGrayQueue *queue)
-{
-	queue->alloc_prepare_func = NULL;
-	queue->alloc_prepare_data = NULL;
-}
-
 static void
 lock_section_queue (SgenSectionGrayQueue *queue)
 {
 	if (!queue->locked)
 		return;
 
-	mono_mutex_lock (&queue->lock);
+	mono_os_mutex_lock (&queue->lock);
 }
 
 static void
@@ -301,7 +281,7 @@ unlock_section_queue (SgenSectionGrayQueue *queue)
 	if (!queue->locked)
 		return;
 
-	mono_mutex_unlock (&queue->lock);
+	mono_os_mutex_unlock (&queue->lock);
 }
 
 void
@@ -311,7 +291,7 @@ sgen_section_gray_queue_init (SgenSectionGrayQueue *queue, gboolean locked, Gray
 
 	queue->locked = locked;
 	if (locked) {
-		mono_mutex_init_recursive (&queue->lock);
+		mono_os_mutex_init_recursive (&queue->lock);
 	}
 
 #ifdef SGEN_CHECK_GRAY_OBJECT_ENQUEUE

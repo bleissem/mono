@@ -215,6 +215,10 @@ namespace Mono.CSharp
 			mcs.StartInfo.RedirectStandardOutput=true;
 			mcs.StartInfo.RedirectStandardError=true;
 			mcs.ErrorDataReceived += new DataReceivedEventHandler (McsStderrDataReceived);
+
+			// Use same text decoder as mcs and not user set values in Console
+			mcs.StartInfo.StandardOutputEncoding =
+			mcs.StartInfo.StandardErrorEncoding = Encoding.UTF8;
 			
 			try {
 				mcs.Start();
@@ -366,7 +370,7 @@ namespace Mono.CSharp
 				}
 			}
 
-			args.Append("/sdk:4.5");
+			args.Append ("/noconfig ");
 
 			args.Append (" -- ");
 			foreach (string source in fileNames)
@@ -387,6 +391,12 @@ namespace Mono.CSharp
 			\s*
 			(?<message>.*)$";
 
+		static readonly Regex RelatedSymbolsRegex = new Regex(
+			@"
+            \(Location\ of\ the\ symbol\ related\ to\ previous\ (warning|error)\)
+			",
+			RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.IgnorePatternWhitespace);
+
 		private static CompilerError CreateErrorFromString(string error_string)
 		{
 			if (error_string.StartsWith ("BETA"))
@@ -399,11 +409,17 @@ namespace Mono.CSharp
 			Regex reg = new Regex (ErrorRegexPattern, RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.IgnorePatternWhitespace);
 			Match match=reg.Match(error_string);
 			if (!match.Success) {
-				// We had some sort of runtime crash
-				error.ErrorText = error_string;
-				error.IsWarning = false;
-				error.ErrorNumber = "";
-				return error;
+				match = RelatedSymbolsRegex.Match (error_string);
+				if (!match.Success) {
+					// We had some sort of runtime crash
+					error.ErrorText = error_string;
+					error.IsWarning = false;
+					error.ErrorNumber = "";
+					return error;
+				} else {
+					// This line is a continuation of previous warning of error
+					return null;
+				}
 			}
 			if (String.Empty != match.Result("${file}"))
 				error.FileName=match.Result("${file}");

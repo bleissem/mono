@@ -26,38 +26,14 @@
 
 #if SECURITY_DEP
 
-#if MONO_X509_ALIAS
-extern alias PrebuiltSystem;
-#endif
 #if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 #endif
 
 #if MONO_SECURITY_ALIAS
-using MonoSecurity::Mono.Security.Interface;
+using MSI = MonoSecurity::Mono.Security.Interface;
 #else
-using Mono.Security.Interface;
-#endif
-#if MONO_X509_ALIAS
-using XX509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-
-using XTransportContext = PrebuiltSystem::System.Net.TransportContext;
-using XAuthenticatedStream = PrebuiltSystem::System.Net.Security.AuthenticatedStream;
-
-using XCipherAlgorithmType = PrebuiltSystem::System.Security.Authentication.CipherAlgorithmType;
-using XHashAlgorithmType = PrebuiltSystem::System.Security.Authentication.HashAlgorithmType;
-using XExchangeAlgorithmType = PrebuiltSystem::System.Security.Authentication.ExchangeAlgorithmType;
-using XSslProtocols = PrebuiltSystem::System.Security.Authentication.SslProtocols;
-#else
-using XX509CertificateCollection = System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-
-using XTransportContext = System.Net.TransportContext;
-using XAuthenticatedStream = System.Net.Security.AuthenticatedStream;
-
-using XCipherAlgorithmType = System.Security.Authentication.CipherAlgorithmType;
-using XHashAlgorithmType = System.Security.Authentication.HashAlgorithmType;
-using XExchangeAlgorithmType = System.Security.Authentication.ExchangeAlgorithmType;
-using XSslProtocols = System.Security.Authentication.SslProtocols;
+using MSI = Mono.Security.Interface;
 #endif
 
 using System;
@@ -70,9 +46,12 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.Security.Cryptography;
 
-namespace Mono.Net.Security
+namespace Mono.Net.Security.Private
 {
-	class MonoSslStreamImpl : MonoSslStream
+	/*
+	 * Strictly private - do not use outside the Mono.Net.Security directory.
+	 */
+	class MonoSslStreamImpl : MSI.IMonoSslStream
 	{
 		IMonoSslStream impl;
 
@@ -88,221 +67,230 @@ namespace Mono.Net.Security
 			this.impl = impl;
 		}
 
-		public override void AuthenticateAsClient (string targetHost)
+		public void AuthenticateAsClient (string targetHost)
 		{
 			Impl.AuthenticateAsClient (targetHost);
 		}
 
-		public override void AuthenticateAsClient (string targetHost, XX509CertificateCollection clientCertificates, XSslProtocols enabledSslProtocols, bool checkCertificateRevocation)
+		public void AuthenticateAsClient (string targetHost, X509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			Impl.AuthenticateAsClient (targetHost, clientCertificates, (SslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			Impl.AuthenticateAsClient (targetHost, clientCertificates, enabledSslProtocols, checkCertificateRevocation);
 		}
 
-		public override IAsyncResult BeginAuthenticateAsClient (string targetHost, AsyncCallback asyncCallback, object asyncState)
+		public IAsyncResult BeginAuthenticateAsClient (string targetHost, AsyncCallback asyncCallback, object asyncState)
 		{
 			return Impl.BeginAuthenticateAsClient (targetHost, asyncCallback, asyncState);
 		}
 
-		public override IAsyncResult BeginAuthenticateAsClient (string targetHost, XX509CertificateCollection clientCertificates, XSslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
+		public IAsyncResult BeginAuthenticateAsClient (string targetHost, X509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
 		{
-			return Impl.BeginAuthenticateAsClient (targetHost, clientCertificates, (SslProtocols)enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
+			return Impl.BeginAuthenticateAsClient (targetHost, clientCertificates, enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
 		}
 
-		public override void EndAuthenticateAsClient (IAsyncResult asyncResult)
+		public void EndAuthenticateAsClient (IAsyncResult asyncResult)
 		{
 			Impl.EndAuthenticateAsClient (asyncResult);
 		}
 
-		public override void AuthenticateAsServer (X509Certificate serverCertificate)
+		public void AuthenticateAsServer (X509Certificate serverCertificate)
 		{
 			Impl.AuthenticateAsServer (serverCertificate);
 		}
 
-		public override void AuthenticateAsServer (X509Certificate serverCertificate, bool clientCertificateRequired, XSslProtocols enabledSslProtocols, bool checkCertificateRevocation)
+		public void AuthenticateAsServer (X509Certificate serverCertificate, bool clientCertificateRequired, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			Impl.AuthenticateAsServer (serverCertificate, clientCertificateRequired, (SslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			Impl.AuthenticateAsServer (serverCertificate, clientCertificateRequired, enabledSslProtocols, checkCertificateRevocation);
 		}
 
-		public override IAsyncResult BeginAuthenticateAsServer (X509Certificate serverCertificate, AsyncCallback asyncCallback, object asyncState)
+		public IAsyncResult BeginAuthenticateAsServer (X509Certificate serverCertificate, AsyncCallback asyncCallback, object asyncState)
 		{
 			return Impl.BeginAuthenticateAsServer (serverCertificate, asyncCallback, asyncState);
 		}
 
-		public override IAsyncResult BeginAuthenticateAsServer (X509Certificate serverCertificate, bool clientCertificateRequired, XSslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
+		public IAsyncResult BeginAuthenticateAsServer (X509Certificate serverCertificate, bool clientCertificateRequired, SslProtocols enabledSslProtocols, bool checkCertificateRevocation, AsyncCallback asyncCallback, object asyncState)
 		{
-			return Impl.BeginAuthenticateAsServer (serverCertificate, clientCertificateRequired, (SslProtocols)enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
+			return Impl.BeginAuthenticateAsServer (serverCertificate, clientCertificateRequired, enabledSslProtocols, checkCertificateRevocation, asyncCallback, asyncState);
 		}
 
-		public override void EndAuthenticateAsServer (IAsyncResult asyncResult)
+		public void EndAuthenticateAsServer (IAsyncResult asyncResult)
 		{
 			Impl.EndAuthenticateAsServer (asyncResult);
 		}
 
-		public override Task AuthenticateAsClientAsync (string targetHost)
+		public Task AuthenticateAsClientAsync (string targetHost)
 		{
 			return Impl.AuthenticateAsClientAsync (targetHost);
 		}
 
-		public override Task AuthenticateAsClientAsync (string targetHost, XX509CertificateCollection clientCertificates, XSslProtocols enabledSslProtocols, bool checkCertificateRevocation)
+		public Task AuthenticateAsClientAsync (string targetHost, X509CertificateCollection clientCertificates, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			return Impl.AuthenticateAsClientAsync (targetHost, clientCertificates, (SslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			return Impl.AuthenticateAsClientAsync (targetHost, clientCertificates, enabledSslProtocols, checkCertificateRevocation);
 		}
 
-		public override Task AuthenticateAsServerAsync (X509Certificate serverCertificate)
+		public Task AuthenticateAsServerAsync (X509Certificate serverCertificate)
 		{
 			return Impl.AuthenticateAsServerAsync (serverCertificate);
 		}
 
-		public override Task AuthenticateAsServerAsync (X509Certificate serverCertificate, bool clientCertificateRequired, XSslProtocols enabledSslProtocols, bool checkCertificateRevocation)
+		public Task AuthenticateAsServerAsync (X509Certificate serverCertificate, bool clientCertificateRequired, SslProtocols enabledSslProtocols, bool checkCertificateRevocation)
 		{
-			return Impl.AuthenticateAsServerAsync (serverCertificate, clientCertificateRequired, (SslProtocols)enabledSslProtocols, checkCertificateRevocation);
+			return Impl.AuthenticateAsServerAsync (serverCertificate, clientCertificateRequired, enabledSslProtocols, checkCertificateRevocation);
 		}
 
-		public override void Flush ()
+		public void Flush ()
 		{
 			Impl.Flush ();
 		}
 
-		public override int Read (byte[] buffer, int offset, int count)
+		public int Read (byte[] buffer, int offset, int count)
 		{
 			return Impl.Read (buffer, offset, count);
 		}
 
-		public override void Write (byte[] buffer)
+		public void Write (byte[] buffer)
 		{
 			Impl.Write (buffer);
 		}
 
-		public override void Write (byte[] buffer, int offset, int count)
+		public void Write (byte[] buffer, int offset, int count)
 		{
 			Impl.Write (buffer, offset, count);
 		}
 
-		public override IAsyncResult BeginRead (byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
+		public IAsyncResult BeginRead (byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
 		{
 			return Impl.BeginRead (buffer, offset, count, asyncCallback, asyncState);
 		}
 
-		public override int EndRead (IAsyncResult asyncResult)
+		public int EndRead (IAsyncResult asyncResult)
 		{
 			return Impl.EndRead (asyncResult);
 		}
 
-		public override IAsyncResult BeginWrite (byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
+		public IAsyncResult BeginWrite (byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState)
 		{
 			return Impl.BeginWrite (buffer, offset, count, asyncCallback, asyncState);
 		}
 
-		public override void EndWrite (IAsyncResult asyncResult)
+		public void EndWrite (IAsyncResult asyncResult)
 		{
 			Impl.EndWrite (asyncResult);
 		}
 
-		public override XTransportContext TransportContext {
-			get { return (XTransportContext)(object)Impl.TransportContext; }
+		public TransportContext TransportContext {
+			get { return Impl.TransportContext; }
 		}
 
-		public override bool IsAuthenticated {
+		public bool IsAuthenticated {
 			get { return Impl.IsAuthenticated; }
 		}
 
-		public override bool IsMutuallyAuthenticated {
+		public bool IsMutuallyAuthenticated {
 			get { return Impl.IsMutuallyAuthenticated; }
 		}
 
-		public override bool IsEncrypted {
+		public bool IsEncrypted {
 			get { return Impl.IsEncrypted; }
 		}
 
-		public override bool IsSigned {
+		public bool IsSigned {
 			get { return Impl.IsSigned; }
 		}
 
-		public override bool IsServer {
+		public bool IsServer {
 			get { return Impl.IsServer; }
 		}
 
-		public override XCipherAlgorithmType CipherAlgorithm {
-			get { return (XCipherAlgorithmType)Impl.CipherAlgorithm; }
+		public CipherAlgorithmType CipherAlgorithm {
+			get { return Impl.CipherAlgorithm; }
 		}
 
-		public override int CipherStrength {
+		public int CipherStrength {
 			get { return Impl.CipherStrength; }
 		}
 
-		public override XHashAlgorithmType HashAlgorithm {
-			get { return (XHashAlgorithmType)Impl.HashAlgorithm; }
+		public HashAlgorithmType HashAlgorithm {
+			get { return Impl.HashAlgorithm; }
 		}
 
-		public override int HashStrength {
+		public int HashStrength {
 			get { return Impl.HashStrength; }
 		}
 
-		public override XExchangeAlgorithmType KeyExchangeAlgorithm {
-			get { return (XExchangeAlgorithmType)Impl.KeyExchangeAlgorithm; }
+		public ExchangeAlgorithmType KeyExchangeAlgorithm {
+			get { return Impl.KeyExchangeAlgorithm; }
 		}
 
-		public override int KeyExchangeStrength {
-			get { return KeyExchangeStrength; }
+		public int KeyExchangeStrength {
+			get { return Impl.KeyExchangeStrength; }
 		}
 
-		public override bool CanRead {
+		public bool CanRead {
 			get { return Impl.CanRead; }
 		}
 
-		public override bool CanTimeout {
+		public bool CanTimeout {
 			get { return Impl.CanTimeout; }
 		}
 
-		public override bool CanWrite {
+		public bool CanWrite {
 			get { return Impl.CanWrite; }
 		}
 
-		public override long Length {
+		public long Length {
 			get { return Impl.Length; }
 		}
 
-		public override long Position {
+		public long Position {
 			get { return Impl.Position; }
 		}
 
-		public override void SetLength (long value)
+		public void SetLength (long value)
 		{
 			Impl.SetLength (value);
 		}
 
-		public override XAuthenticatedStream AuthenticatedStream {
-			get { return (XAuthenticatedStream)(Stream)Impl.AuthenticatedStream; }
+		public AuthenticatedStream AuthenticatedStream {
+			get { return Impl.AuthenticatedStream; }
 		}
 
-		public override int ReadTimeout {
+		public int ReadTimeout {
 			get { return Impl.ReadTimeout; }
 			set { Impl.ReadTimeout = value; }
 		}
 
-		public override int WriteTimeout {
+		public int WriteTimeout {
 			get { return Impl.WriteTimeout; }
 			set { Impl.WriteTimeout = value; }
 		}
 
-		public override bool CheckCertRevocationStatus {
+		public bool CheckCertRevocationStatus {
 			get { return Impl.CheckCertRevocationStatus; }
 		}
 
-		public override X509Certificate InternalLocalCertificate {
+		public X509Certificate InternalLocalCertificate {
 			get { return Impl.InternalLocalCertificate; }
 		}
 
-		public override X509Certificate LocalCertificate {
+		public X509Certificate LocalCertificate {
 			get { return Impl.LocalCertificate; }
 		}
 
-		public override X509Certificate RemoteCertificate {
+		public X509Certificate RemoteCertificate {
 			get { return Impl.RemoteCertificate; }
 		}
 
-		public override XSslProtocols SslProtocol {
-			get { return (XSslProtocols)Impl.SslProtocol; }
+		public SslProtocols SslProtocol {
+			get { return Impl.SslProtocol; }
+		}
+
+		public MSI.MonoTlsProvider Provider {
+			get { return Impl.Provider; }
+		}
+
+		public MSI.MonoTlsConnectionInfo GetConnectionInfo ()
+		{
+			return Impl.GetConnectionInfo ();
 		}
 
 		void CheckDisposed ()
@@ -311,7 +299,13 @@ namespace Mono.Net.Security
 				throw new ObjectDisposedException ("MonoSslStream");
 		}
 
-		protected override void Dispose (bool disposing)
+		public void Dispose ()
+		{
+			Dispose (true);
+			GC.SuppressFinalize (this);
+		}
+
+		protected virtual void Dispose (bool disposing)
 		{
 			if (impl != null && disposing) {
 				impl.Dispose ();

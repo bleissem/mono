@@ -1138,7 +1138,7 @@ namespace Mono.CSharp {
 				//
 				// Iterate over inflated interfaces
 				//
-				foreach (var iface in Interfaces) {
+				foreach (var iface in InterfacesDefined) {
 					found = false;
 					if (other.InterfacesDefined != null) {
 						foreach (var oiface in other.Interfaces) {
@@ -1171,7 +1171,7 @@ namespace Mono.CSharp {
 				//
 				// Iterate over inflated interfaces
 				//
-				foreach (var oiface in other.Interfaces) {
+				foreach (var oiface in other.InterfacesDefined) {
 					found = false;
 
 					if (InterfacesDefined != null) {
@@ -1551,7 +1551,7 @@ namespace Mono.CSharp {
 				// Parent was inflated, find the same type on inflated type
 				// to use same cache for nested types on same generic parent
 				//
-				type = MemberCache.FindNestedType (parent, type.Name, type.Arity);
+				type = MemberCache.FindNestedType (parent, type.Name, type.Arity, false);
 
 				//
 				// Handle the tricky case where parent shares local type arguments

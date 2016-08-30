@@ -40,7 +40,7 @@ is_long_stack_size (int type)
 static gboolean
 lower_load (MonoCompile *cfg, MonoInst *load, MonoInst *ldaddr)
 {
-	MonoInst *var = ldaddr->inst_p0;
+	MonoInst *var = (MonoInst *)ldaddr->inst_p0;
 	MonoType *type = &var->klass->byval_arg;
 	int replaced_op = mono_type_to_load_membase (cfg, type);
 
@@ -70,7 +70,7 @@ lower_load (MonoCompile *cfg, MonoInst *load, MonoInst *ldaddr)
 static gboolean
 lower_store (MonoCompile *cfg, MonoInst *store, MonoInst *ldaddr)
 {
-	MonoInst *var = ldaddr->inst_p0;
+	MonoInst *var = (MonoInst *)ldaddr->inst_p0;
 	MonoType *type = &var->klass->byval_arg;
 	int replaced_op = mono_type_to_store_membase (cfg, type);
 
@@ -101,7 +101,7 @@ lower_store (MonoCompile *cfg, MonoInst *store, MonoInst *ldaddr)
 static gboolean
 lower_store_imm (MonoCompile *cfg, MonoInst *store, MonoInst *ldaddr)
 {
-	MonoInst *var = ldaddr->inst_p0;
+	MonoInst *var = (MonoInst *)ldaddr->inst_p0;
 	MonoType *type = &var->klass->byval_arg;
 	int store_op = mono_type_to_store_membase (cfg, type);
 	if (store_op == OP_STOREV_MEMBASE || store_op == OP_STOREX_MEMBASE)
@@ -191,11 +191,13 @@ handle_instruction:
 			case OP_LOADU4_MEMBASE:
 			case OP_LOADI1_MEMBASE:
 			case OP_LOADI8_MEMBASE:
+#ifndef MONO_ARCH_SOFT_FLOAT_FALLBACK
 			case OP_LOADR4_MEMBASE:
+#endif
 			case OP_LOADR8_MEMBASE:
 				if (ins->inst_offset != 0)
 					continue;
-				tmp = g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->sreg1));
+				tmp = (MonoInst *)g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->sreg1));
 				if (tmp) {
 					if (cfg->verbose_level > 2) { printf ("Found candidate load:"); mono_print_ins (ins); }
 					if (lower_load (cfg, ins, tmp)) {
@@ -211,12 +213,14 @@ handle_instruction:
 			case OP_STOREI2_MEMBASE_REG:
 			case OP_STOREI4_MEMBASE_REG:
 			case OP_STOREI8_MEMBASE_REG:
+#ifndef MONO_ARCH_SOFT_FLOAT_FALLBACK
 			case OP_STORER4_MEMBASE_REG:
+#endif
 			case OP_STORER8_MEMBASE_REG:
 			case OP_STOREV_MEMBASE:
 				if (ins->inst_offset != 0)
 					continue;
-				tmp = g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->dreg));
+				tmp = (MonoInst *)g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->dreg));
 				if (tmp) {
 					if (cfg->verbose_level > 2) { printf ("Found candidate store:"); mono_print_ins (ins); }
 					if (lower_store (cfg, ins, tmp)) {
@@ -226,13 +230,13 @@ handle_instruction:
 					}
 				}
 				break;
-
+			//FIXME missing storei1_membase_imm and storei2_membase_imm
 			case OP_STORE_MEMBASE_IMM:
 			case OP_STOREI4_MEMBASE_IMM:
 			case OP_STOREI8_MEMBASE_IMM:
 				if (ins->inst_offset != 0)
 					continue;
-				tmp = g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->dreg));
+				tmp = (MonoInst *)g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->dreg));
 				if (tmp) {
 					if (cfg->verbose_level > 2) { printf ("Found candidate store-imm:"); mono_print_ins (ins); }
 					needs_dce |= lower_store_imm (cfg, ins, tmp);
@@ -240,7 +244,7 @@ handle_instruction:
 				break;
 			case OP_CHECK_THIS:
 			case OP_NOT_NULL:
-				tmp = g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->sreg1));
+				tmp = (MonoInst *)g_hash_table_lookup (addr_loads, GINT_TO_POINTER (ins->sreg1));
 				if (tmp) {
 					if (cfg->verbose_level > 2) { printf ("Found null check over local: "); mono_print_ins (ins); }
 					NULLIFY_INS (ins);

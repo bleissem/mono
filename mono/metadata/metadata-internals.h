@@ -111,6 +111,7 @@ typedef struct {
 	GHashTable *delegate_end_invoke_cache;
 	GHashTable *runtime_invoke_cache;
 	GHashTable *runtime_invoke_vtype_cache;
+	GHashTable *runtime_invoke_sig_cache;
 
 	/*
 	 * indexed by SignaturePointerPair
@@ -270,6 +271,8 @@ struct _MonoImage {
 
 	gpointer aot_module;
 
+	guint8 aotid[16];
+
 	/*
 	 * The Assembly this image was loaded from.
 	 */
@@ -333,6 +336,8 @@ struct _MonoImage {
 	GHashTable *ldflda_wrapper_cache;
 	GHashTable *stfld_wrapper_cache;
 	GHashTable *isinst_cache;
+
+	GHashTable *icall_wrapper_cache;
 	GHashTable *castclass_cache;
 	GHashTable *proxy_isinst_cache;
 	GHashTable *rgctx_template_hash; /* LOCKING: templates lock */
@@ -388,6 +393,11 @@ struct _MonoImage {
 
 	/* The loader used to load this image */
 	MonoImageLoader *loader;
+
+	// Containers for MonoGenericParams associated with this image but not with any specific class or method. Created on demand.
+	// This could happen, for example, for MonoTypes associated with TypeSpec table entries.
+	MonoGenericContainer *anonymous_generic_class_container;
+	MonoGenericContainer *anonymous_generic_method_container;
 
 	/*
 	 * No other runtime locks must be taken while holding this lock.
@@ -715,19 +725,6 @@ mono_metadata_interfaces_from_typedef_full  (MonoImage             *image,
 											 MonoGenericContext    *context,
 											 MonoError *error);
 
-MonoArrayType *
-mono_metadata_parse_array_full              (MonoImage             *image,
-					     MonoGenericContainer  *container,
-					     const char            *ptr,
-					     const char           **rptr);
-
-MONO_API MonoType *
-mono_metadata_parse_type_full               (MonoImage             *image,
-					     MonoGenericContainer  *container,
-					     short                  opt_attrs,
-					     const char            *ptr,
-					     const char           **rptr);
-
 MONO_API MonoMethodSignature *
 mono_metadata_parse_method_signature_full   (MonoImage             *image,
 					     MonoGenericContainer  *generic_container,
@@ -739,7 +736,12 @@ mono_metadata_parse_method_signature_full   (MonoImage             *image,
 MONO_API MonoMethodHeader *
 mono_metadata_parse_mh_full                 (MonoImage             *image,
 					     MonoGenericContainer  *container,
-					     const char            *ptr);
+					     const char            *ptr,
+						 MonoError *error);
+
+MonoMethodSignature  *mono_metadata_parse_signature_checked (MonoImage *image, 
+							     uint32_t    token,
+							     MonoError *error);
 
 gboolean
 mono_method_get_header_summary (MonoMethod *method, MonoMethodHeaderSummary *summary);
@@ -780,7 +782,7 @@ gboolean
 mono_metadata_generic_param_equal (MonoGenericParam *p1, MonoGenericParam *p2);
 
 void mono_dynamic_stream_reset  (MonoDynamicStream* stream);
-void mono_assembly_addref       (MonoAssembly *assembly);
+MONO_API void mono_assembly_addref       (MonoAssembly *assembly);
 void mono_assembly_load_friends (MonoAssembly* ass);
 gboolean mono_assembly_has_skip_verification (MonoAssembly* ass);
 
@@ -898,6 +900,15 @@ mono_method_get_wrapper_cache (MonoMethod *method);
 
 MonoType*
 mono_metadata_parse_type_checked (MonoImage *m, MonoGenericContainer *container, short opt_attrs, gboolean transient, const char *ptr, const char **rptr, MonoError *error);
+
+MonoGenericContainer *
+get_anonymous_container_for_image (MonoImage *image, gboolean is_mvar);
+
+char *
+mono_image_set_description (MonoImageSet *);
+
+MonoImageSet *
+mono_find_image_set_owner (void *ptr);
 
 #endif /* __MONO_METADATA_INTERNALS_H__ */
 

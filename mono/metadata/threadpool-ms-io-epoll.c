@@ -48,13 +48,6 @@ epoll_init (gint wakeup_pipe_fd)
 }
 
 static void
-epoll_cleanup (void)
-{
-	g_free (epoll_events);
-	close (epoll_fd);
-}
-
-static void
 epoll_register_fd (gint fd, gint events, gboolean is_new)
 {
 	struct epoll_event event;
@@ -91,7 +84,9 @@ epoll_event_wait (void (*callback) (gint fd, gint events, gpointer user_data), g
 
 	mono_gc_set_skip_thread (TRUE);
 
+	MONO_ENTER_GC_SAFE;
 	ready = epoll_wait (epoll_fd, epoll_events, EPOLL_NEVENTS, -1);
+	MONO_EXIT_GC_SAFE;
 
 	mono_gc_set_skip_thread (FALSE);
 
@@ -127,7 +122,6 @@ epoll_event_wait (void (*callback) (gint fd, gint events, gpointer user_data), g
 
 static ThreadPoolIOBackend backend_epoll = {
 	.init = epoll_init,
-	.cleanup = epoll_cleanup,
 	.register_fd = epoll_register_fd,
 	.remove_fd = epoll_remove_fd,
 	.event_wait = epoll_event_wait,

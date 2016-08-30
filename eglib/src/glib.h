@@ -1,6 +1,5 @@
 #ifndef __GLIB_H
 #define __GLIB_H
-
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,15 +8,12 @@
 #include <ctype.h>
 #include <limits.h>
 
+
 #ifdef _MSC_VER
 #pragma include_alias(<eglib-config.h>, <eglib-config.hw>)
 #endif
 
-/* VS 2010 and later have stdint.h */
-#if defined(_MSC_VER) && _MSC_VER < 1600
-#else
 #include <stdint.h>
-#endif
 
 #include <eglib-config.h>
 #ifndef EGLIB_NO_REMAP
@@ -63,21 +59,6 @@ typedef const void *   gconstpointer;
 typedef char           gchar;
 typedef unsigned char  guchar;
 
-#if !G_TYPES_DEFINED
-/* VS 2010 and later have stdint.h */
-#if defined(_MSC_VER) && _MSC_VER < 1600
-typedef __int8			gint8;
-typedef unsigned __int8		guint8;
-typedef __int16			gint16;
-typedef unsigned __int16	guint16;
-typedef __int32			gint32;
-typedef unsigned __int32	guint32;
-typedef __int64			gint64;
-typedef unsigned __int64	guint64;
-typedef float			gfloat;
-typedef double			gdouble;
-typedef int			gboolean;
-#else
 /* Types defined in terms of the stdint.h */
 typedef int8_t         gint8;
 typedef uint8_t        guint8;
@@ -90,8 +71,6 @@ typedef uint64_t       guint64;
 typedef float          gfloat;
 typedef double         gdouble;
 typedef int32_t        gboolean;
-#endif
-#endif
 
 typedef guint16 gunichar2;
 typedef guint32 gunichar;
@@ -135,6 +114,11 @@ typedef guint32 gunichar;
 
 #define G_CONST_RETURN const
 
+#define G_GUINT64_FORMAT PRIu64
+#define G_GINT64_FORMAT PRIi64
+#define G_GUINT32_FORMAT PRIu32
+#define G_GINT32_FORMAT PRIi32
+
 /*
  * Allocation
  */
@@ -142,6 +126,7 @@ void g_free (void *ptr);
 gpointer g_realloc (gpointer obj, gsize size);
 gpointer g_malloc (gsize x);
 gpointer g_malloc0 (gsize x);
+gpointer g_calloc (gsize n, gsize x);
 gpointer g_try_malloc (gsize x);
 gpointer g_try_realloc (gpointer obj, gsize size);
 
@@ -154,7 +139,7 @@ gpointer g_try_realloc (gpointer obj, gsize size);
 #define g_alloca(size)		alloca (size)
 
 gpointer g_memdup (gconstpointer mem, guint byte_size);
-static inline gchar   *g_strdup (const gchar *str) { if (str) {return strdup (str);} return NULL; }
+static inline gchar   *g_strdup (const gchar *str) { if (str) { return (gchar*) g_memdup (str, (guint)strlen (str) + 1); } return NULL; }
 gchar **g_strdupv (gchar **str_array);
 
 typedef struct {
@@ -162,11 +147,9 @@ typedef struct {
 	gpointer (*realloc)     (gpointer mem, gsize n_bytes);
 	void     (*free)        (gpointer mem);
 	gpointer (*calloc)      (gsize    n_blocks, gsize n_block_bytes);
-	gpointer (*try_malloc)  (gsize    n_bytes);
-	gpointer (*try_realloc) (gpointer mem, gsize n_bytes);
 } GMemVTable;
 
-#define g_mem_set_vtable(x)
+void g_mem_set_vtable (GMemVTable* vtable);
 
 struct _GMemChunk {
 	guint alloc_size;
@@ -239,11 +222,11 @@ gint         g_printf          (gchar const *format, ...);
 gint         g_fprintf         (FILE *file, gchar const *format, ...);
 gint         g_sprintf         (gchar *string, gchar const *format, ...);
 gint         g_snprintf        (gchar *string, gulong n, gchar const *format, ...);
+gint         g_vasprintf       (gchar **ret, const gchar *fmt, va_list ap);
 #define g_vprintf vprintf
 #define g_vfprintf vfprintf
 #define g_vsprintf vsprintf
 #define g_vsnprintf vsnprintf
-#define g_vasprintf vasprintf
 
 gsize   g_strlcpy            (gchar *dest, const gchar *src, gsize dest_size);
 gchar  *g_stpcpy             (gchar *dest, const char *src);
@@ -787,6 +770,8 @@ const gchar *g_get_tmp_dir     (void);
 const gchar *g_get_user_name   (void);
 gchar *g_get_prgname           (void);
 void  g_set_prgname            (const gchar *prgname);
+
+gboolean g_ensure_directory_exists (const gchar *filename);
 
 /*
  * Shell

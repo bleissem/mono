@@ -24,9 +24,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#if SECURITY_DEP && MONO_X509_ALIAS
-extern alias PrebuiltSystem;
-using X509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
+#if SECURITY_DEP
+#if MONO_SECURITY_ALIAS
+extern alias MonoSecurity;
+#endif
+
+#if MONO_SECURITY_ALIAS
+using MSI = MonoSecurity::Mono.Security.Interface;
+#else
+using MSI = Mono.Security.Interface;
+#endif
 #endif
 
 using System;
@@ -214,6 +221,13 @@ namespace Mono.Net.Security
 		IAsyncResult BeginWrite (byte[] buffer, int offset, int count, AsyncCallback asyncCallback, object asyncState);
 
 		void EndWrite (IAsyncResult asyncResult);
+
+#if SECURITY_DEP
+		MSI.MonoTlsProvider Provider {
+			get;
+		}
+
+		MSI.MonoTlsConnectionInfo GetConnectionInfo ();
+#endif
 	}
 }
-

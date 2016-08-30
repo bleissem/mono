@@ -1,11 +1,11 @@
 #include "config.h"
 
-#if defined(HAVE_SGEN_GC) && defined(HOST_WIN32)
+#if defined(HAVE_SGEN_GC) && !defined(USE_COOP_GC) && defined(HOST_WIN32)
 
 #include "io-layer/io-layer.h"
 
 #include "sgen/sgen-gc.h"
-#include "metadata/gc-internal.h"
+#include "metadata/gc-internals.h"
 
 gboolean
 sgen_resume_thread (SgenThreadInfo *info)
@@ -58,7 +58,6 @@ sgen_suspend_thread (SgenThreadInfo *info)
 	CloseHandle (handle);
 
 #if !defined(MONO_CROSS_COMPILE)
-#ifdef USE_MONO_CTX
 	memset (&info->client_info.ctx, 0, sizeof (MonoContext));
 #ifdef TARGET_AMD64
     info->client_info.ctx.gregs[AMD64_RIP] = context.Rip;
@@ -92,19 +91,6 @@ sgen_suspend_thread (SgenThreadInfo *info)
 	info->client_info.stopped_ip = (gpointer)context.Eip;
 	info->client_info.stack_start = (char*)context.Esp - REDZONE_SIZE;
 #endif
-
-#else
-	info->client_info.regs [0] = context.Edi;
-	info->client_info.regs [1] = context.Esi;
-	info->client_info.regs [2] = context.Ebx;
-	info->client_info.regs [3] = context.Edx;
-	info->client_info.regs [4] = context.Ecx;
-	info->client_info.regs [5] = context.Eax;
-	info->client_info.regs [6] = context.Ebp;
-	info->client_info.regs [7] = context.Esp;
-	info->client_info.stopped_ip = (gpointer)context.Eip;
-	info->client_info.stack_start = (char*)context.Esp - REDZONE_SIZE;
-#endif
 #endif
 
 	/* Notify the JIT */
@@ -123,12 +109,11 @@ sgen_wait_for_suspend_ack (int count)
 int
 sgen_thread_handshake (BOOL suspend)
 {
-	SgenThreadInfo *info;
 	SgenThreadInfo *current = mono_thread_info_current ();
 	int count = 0;
 
 	current->client_info.suspend_done = TRUE;
-	FOREACH_THREAD_SAFE (info) {
+	FOREACH_THREAD (info) {
 		if (info == current)
 			continue;
 		info->client_info.suspend_done = FALSE;
@@ -142,7 +127,7 @@ sgen_thread_handshake (BOOL suspend)
 				continue;
 		}
 		++count;
-	} END_FOREACH_THREAD_SAFE
+	} FOREACH_THREAD_END
 	return count;
 }
 

@@ -19,7 +19,6 @@ TEST_MCS_FLAGS = $(LIB_MCS_FLAGS) /nowarn:618
 EXTRA_DISTFILES = Test/SqliteTest.cs \
 	Test/test.sql \
 	resources/SR.resx	\
-	resources/ChangeLog	\
 	resources/DataTypes.xml	\
 	resources/MetaDataCollections.xml \
 	$(PREBUILT) \
@@ -43,5 +42,5 @@ $(PREBUILT): %.prebuilt: %
 	cp $* $@
 
 $(RESX_RESOURCES): %.resources: %.resx
-	$(RESGEN) $< || cp $@.prebuilt $@
+	$(RESGEN) -useSourcePath $< || cp $@.prebuilt $@
 

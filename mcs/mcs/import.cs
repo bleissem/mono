@@ -676,19 +676,15 @@ namespace Mono.CSharp
 			if (!param.IsEmpty) {
 				if (is_valid_property) {
 					var index_name = declaringType.MemberDefinition.GetAttributeDefaultMember ();
-					if (index_name == null) {
+					if (index_name == null || index_name != pi.Name) {
 						is_valid_property = false;
 					} else {
 						if (get != null) {
 							if (get.IsStatic)
 								is_valid_property = false;
-							if (get.Name.IndexOf (index_name, StringComparison.Ordinal) != 4)
-								is_valid_property = false;
 						}
 						if (set != null) {
 							if (set.IsStatic)
-								is_valid_property = false;
-							if (set.Name.IndexOf (index_name, StringComparison.Ordinal) != 4)
 								is_valid_property = false;
 						}
 					}
@@ -818,7 +814,7 @@ namespace Mono.CSharp
 						if (t.Kind == MemberKind.MissingType)
 							spec = t;
 						else
-							spec = MemberCache.FindNestedType (spec, t.Name, t.Arity);
+							spec = MemberCache.FindNestedType (spec, t.Name, t.Arity, false);
 
 						if (t.Arity > 0) {
 							spec = spec.MakeGenericType (module, targs.Skip (targs_pos).Take (spec.Arity).ToArray ());
@@ -838,7 +834,7 @@ namespace Mono.CSharp
 						if (index > 0)
 							name = name.Substring (0, index);
 
-						spec = MemberCache.FindNestedType (spec, name, targs.Length - targs_pos);
+						spec = MemberCache.FindNestedType (spec, name, targs.Length - targs_pos, false);
 
 						if (spec.Arity > 0) {
 							spec = spec.MakeGenericType (module, targs.Skip (targs_pos).ToArray ());

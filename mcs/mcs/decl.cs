@@ -18,7 +18,7 @@ using System.Diagnostics;
 using System.Text;
 using Mono.CompilerServices.SymbolWriter;
 
-#if NET_2_1
+#if MOBILE
 using XmlElement = System.Object;
 #else
 using System.Xml;
@@ -524,6 +524,9 @@ namespace Mono.CSharp {
 			while (TypeManager.HasElementType (p))
 				p = TypeManager.GetElementType (p);
 
+			if (p.BuiltinType != BuiltinTypeSpec.Type.None)
+				return true;
+
 			if (p.IsGenericParameter)
 				return true;
 
@@ -543,6 +546,10 @@ namespace Mono.CSharp {
 
 				bool same_access_restrictions = false;
 				for (MemberCore mc = this; !same_access_restrictions && mc != null && mc.Parent != null; mc = mc.Parent) {
+					var tc = mc as TypeContainer;
+					if (tc != null && tc.PartialContainer != null)
+						mc = tc.PartialContainer;
+
 					var al = mc.ModFlags & Modifiers.AccessibilityMask;
 					switch (pAccess) {
 					case Modifiers.INTERNAL:

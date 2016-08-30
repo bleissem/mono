@@ -29,10 +29,125 @@ using SharpCompress.Archive;
 
 namespace System.IO.Compression
 {
+	internal class ZipArchiveEntryStream : Stream, IDisposable
+	{
+		private readonly ZipArchiveEntry entry;
+		private Stream stream;
+
+		public override bool CanRead {
+			get { 
+				return stream.CanRead;
+			}
+		}
+
+		public override bool CanSeek {
+			get {
+				return entry.Archive.Mode != ZipArchiveMode.Read;
+			}
+		}
+
+		public override bool CanWrite {
+			get {
+				return entry.Archive.Mode != ZipArchiveMode.Read;
+			}
+		}
+
+		public override long Length {
+			get {
+				return stream.CanWrite ? stream.Length : entry.Length;
+			}
+		}
+
+		public override long Position {
+			get {
+				return stream.Position;
+			}
+			set {
+				stream.Position = value;
+			}
+		}
+
+		public ZipArchiveEntryStream(ZipArchiveEntry entry, Stream stream)
+		{
+			this.entry = entry;
+			this.stream = stream;
+		}
+
+		public override void Flush ()
+		{
+			stream.Flush();
+		}
+
+		public override long Seek (long offset, SeekOrigin origin)
+		{
+			return stream.Seek(offset, origin);
+		}
+
+		public override void SetLength (long value)
+		{
+			stream.SetLength(value);
+		}
+
+		public override int Read (byte[] buffer, int offset, int count)
+		{
+			return stream.Read(buffer, offset, count);
+		}
+
+		public override void Write (byte[] buffer, int offset, int count)
+		{
+			stream.Write(buffer, offset, count);
+		}
+
+		internal void EnsureWriteable()
+		{
+			if (entry.Archive.Mode == ZipArchiveMode.Update && !stream.CanWrite)
+			{
+				// Replace the read-only stream with a writeable memory stream.
+				SetWriteable();
+			}
+		}
+
+		internal void SetWriteable()
+		{
+			var archive = entry.Archive;
+
+			var internalEntry = entry.entry;
+			var newEntry = archive.CreateEntryInternal(internalEntry.Key);
+			var newStream = newEntry.OpenEntryStream();
+
+			var openStream = stream;
+			openStream.CopyTo(newStream);
+			openStream.Dispose();
+
+			newStream.Position = 0;
+
+			archive.zipFile.RemoveEntry(internalEntry);
+			entry.entry = newEntry;
+			stream = newStream;
+		}
+
+		public new void Dispose()
+		{
+			Dispose(true);
+			GC.SuppressFinalize(this);
+			base.Dispose();
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing) 
+			{
+				entry.openStream = null;
+				stream.Dispose();
+			}
+		}
+	}
+
 	public class ZipArchiveEntry
 	{
-		readonly SharpCompress.Archive.Zip.ZipArchiveEntry entry;
-		private Stream openStream;
+		internal SharpCompress.Archive.Zip.ZipArchiveEntry entry;
+		internal ZipArchiveEntryStream openStream;
+        internal bool wasWritten;
 		private bool wasDeleted;
 
 		internal ZipArchiveEntry(ZipArchive	archive, SharpCompress.Archive.Zip.ZipArchiveEntry entry)
@@ -88,14 +203,14 @@ namespace System.IO.Compression
 			if (Archive.disposed)
 				throw new ObjectDisposedException("The zip archive for this entry has been disposed.");
 
-			if (Archive.Mode !=	ZipArchiveMode.Update)
+			if (Archive.Mode != ZipArchiveMode.Update)
 				throw new NotSupportedException("The zip archive for this entry was opened in a mode other than Update.");
 
 			if (openStream != null)
 				throw new IOException("The entry is already open for reading or writing.");
 
 			wasDeleted = true;
-			Archive.zipFile.RemoveEntry(entry);
+			Archive.RemoveEntryInternal(this);
 		}
 
 		public Stream Open()
@@ -112,9 +227,16 @@ namespace System.IO.Compression
 			if (Archive.Mode == ZipArchiveMode.Create && openStream != null)
 				throw new IOException("The archive for this entry was opened with the Create mode, and this entry has already been written to.");
 
-			openStream = entry.OpenEntryStream();
+			var entryStream = entry.OpenEntryStream();
+			openStream = new ZipArchiveEntryStream(this, entryStream);
+			openStream.EnsureWriteable();
 
 			return openStream;
+		}
+
+		public override string ToString()
+		{
+			return FullName;
 		}
 	}
 }

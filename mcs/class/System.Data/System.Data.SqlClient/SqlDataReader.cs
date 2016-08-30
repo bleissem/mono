@@ -38,6 +38,8 @@ using Mono.Data.Tds.Protocol;
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections;
 using System.ComponentModel;
 using System.Data;
@@ -1263,20 +1265,29 @@ namespace System.Data.SqlClient
 				throw new ArgumentNullException ("values");
 
 			int len = values.Length;
-			int bigDecimalIndex = command.Tds.ColumnValues.BigDecimalIndex;
+			var tds = command.Tds;
+			int columns = Math.Min (len, tds.Columns.Count);
 
-			// If a four-byte decimal is stored, then we can't convert to
-			// a native type.  Throw an OverflowException.
-			if (bigDecimalIndex >= 0 && bigDecimalIndex < len)
-				throw new OverflowException ();
-			try {
-				command.Tds.ColumnValues.CopyTo (0, values, 0,
-								 len > command.Tds.ColumnValues.Count ? command.Tds.ColumnValues.Count : len);
-			} catch (TdsInternalException ex) {
-				command.Connection.Close ();
-				throw SqlException.FromTdsInternalException ((TdsInternalException) ex);
+			if ((command.CommandBehavior & CommandBehavior.SequentialAccess) != 0) {
+				for (int i = 0; i < columns; ++i) {
+					values [i] = tds.GetSequentialColumnValue (i);
+				}
+			} else {
+				int bigDecimalIndex = tds.ColumnValues.BigDecimalIndex;
+
+				// If a four-byte decimal is stored, then we can't convert to
+				// a native type.  Throw an OverflowException.
+				if (bigDecimalIndex >= 0 && bigDecimalIndex < len)
+					throw new OverflowException ();
+				try {
+					tds.ColumnValues.CopyTo (0, values, 0, columns);
+				} catch (TdsInternalException ex) {
+					command.Connection.Close ();
+					throw SqlException.FromTdsInternalException ((TdsInternalException)ex);
+				}
 			}
-			return (len < FieldCount ? len : FieldCount);
+
+			return columns;
 		}
 
 
@@ -1415,6 +1426,25 @@ namespace System.Data.SqlClient
 		public virtual XmlReader GetXmlReader (int i)
 		{
 			throw new NotImplementedException ();	
+		}
+
+		override public Task<T> GetFieldValueAsync<T> (int i, CancellationToken cancellationToken)
+		{
+			return base.GetFieldValueAsync<T> (i, cancellationToken);
+		}
+
+		override public Stream GetStream (int i)
+		{
+			return base.GetStream (i);
+		}
+		override public TextReader GetTextReader (int i)
+		{
+			return base.GetTextReader (i);
+		}
+
+		override public Task<bool> IsDBNullAsync (int i, CancellationToken cancellationToken)
+		{
+			return base.IsDBNullAsync (i, cancellationToken);
 		}
 
 		#endregion // Methods

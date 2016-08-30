@@ -48,7 +48,7 @@ conc_table_new (int size)
 static void
 conc_table_free (gpointer ptr)
 {
-	conc_table *table = ptr;
+	conc_table *table = (conc_table *)ptr;
 	g_free (table->kvs);
 	g_free (table);
 }
@@ -56,7 +56,7 @@ conc_table_free (gpointer ptr)
 static void
 conc_table_lf_free (conc_table *table)
 {
-	mono_thread_hazardous_free_or_queue (table, conc_table_free, TRUE, FALSE);
+	mono_thread_hazardous_try_free (table, conc_table_free);
 }
 
 
@@ -164,7 +164,7 @@ mono_conc_hashtable_lookup (MonoConcurrentHashTable *hash_table, gpointer key)
 	hp = mono_hazard_pointer_get ();
 
 retry:
-	table = get_hazardous_pointer ((gpointer volatile*)&hash_table->table, hp, 0);
+	table = (conc_table *)get_hazardous_pointer ((gpointer volatile*)&hash_table->table, hp, 0);
 	table_mask = table->table_size - 1;
 	kvs = table->kvs;
 	i = hash & table_mask;

@@ -28,20 +28,13 @@
 #if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 #endif
-#if MONO_X509_ALIAS
-extern alias PrebuiltSystem;
-#endif
 
 #if MONO_SECURITY_ALIAS
 using MonoSecurity::Mono.Security.Interface;
 #else
 using Mono.Security.Interface;
 #endif
-#if MONO_X509_ALIAS
-using XX509CertificateCollection = PrebuiltSystem::System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-#else
 using XX509CertificateCollection = System.Security.Cryptography.X509Certificates.X509CertificateCollection;
-#endif
 #endif
 
 using System;
@@ -95,9 +88,6 @@ namespace Mono.Net.Security
 			provider = request.TlsProvider ?? MonoTlsProviderFactory.GetProviderInternal ();
 			status = WebExceptionStatus.SecureChannelFailure;
 
-			if (settings == null)
-				settings = new MonoTlsSettings ();
-
 			validationHelper = ChainValidationHelper.Create (provider.Provider, ref settings, this);
 		}
 
@@ -107,18 +97,24 @@ namespace Mono.Net.Security
 
 			try {
 				sslStream.AuthenticateAsClient (
-					request.Address.Host, (XX509CertificateCollection)(object)request.ClientCertificates,
+					request.Host, request.ClientCertificates,
 					(SslProtocols)ServicePointManager.SecurityProtocol,
 					ServicePointManager.CheckCertificateRevocationList);
 
 				status = WebExceptionStatus.Success;
+			} catch (Exception ex) {
+				status = WebExceptionStatus.SecureChannelFailure;
+				throw;
 			} finally {
 				if (CertificateValidationFailed)
 					status = WebExceptionStatus.TrustFailure;
 
-				request.ServicePoint.SetClientCertificate (sslStream.InternalLocalCertificate);
-				if (status != WebExceptionStatus.Success)
+				if (status == WebExceptionStatus.Success)
+					request.ServicePoint.UpdateClientCertificate (sslStream.InternalLocalCertificate);
+				else {
+					request.ServicePoint.UpdateClientCertificate (null);
 					sslStream = null;
+				}
 			}
 
 			try {

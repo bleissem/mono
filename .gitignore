@@ -38,6 +38,7 @@ obj/
 [Rr]elease*/
 Ankh.NoLoad
 *.gpState
+.vscode/
 
 # Tooling
 _ReSharper*/
@@ -125,4 +126,5 @@ mono.h
 mono-*.tar.*
 tmpinst-dir.stamp
 msvc/scripts/inputs/
+extensions-config.h
 

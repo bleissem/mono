@@ -177,7 +177,7 @@ extern gboolean WriteFile(gpointer handle, gconstpointer buffer,
 extern gboolean FlushFileBuffers(gpointer handle);
 extern gboolean SetEndOfFile(gpointer handle);
 extern guint32 SetFilePointer(gpointer handle, gint32 movedistance,
-			      gint32 *highmovedistance, WapiSeekMethod method);
+			      gint32 *highmovedistance, guint32 method);
 extern WapiFileType GetFileType(gpointer handle);
 extern guint32 GetFileSize(gpointer handle, guint32 *highsize);
 extern gboolean GetFileTime(gpointer handle, WapiFileTime *create_time,
@@ -225,6 +225,7 @@ extern gboolean GetVolumeInformation (const gunichar2 *path, gunichar2 *volumena
 
 
 extern void _wapi_io_init (void);
+extern void _wapi_io_cleanup (void);
 
 G_END_DECLS
 

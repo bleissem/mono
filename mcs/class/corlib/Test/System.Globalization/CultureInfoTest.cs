@@ -428,10 +428,10 @@ namespace MonoTests.System.Globalization
 		}
 
 		[Test]
-		public void GetCultureInfo_Identifier_Negative ()
+		public void GetCultureInfo_Identifier_Nonpositive ()
 		{
 			try {
-				CultureInfo.GetCultureInfo (-1);
+				CultureInfo.GetCultureInfo (0);
 				Assert.Fail ("#1");
 			} catch (ArgumentOutOfRangeException ex) {
 				Assert.AreEqual (typeof (ArgumentOutOfRangeException), ex.GetType (), "#2");
@@ -623,7 +623,6 @@ namespace MonoTests.System.Globalization
 			Assert.IsFalse (zh2.Equals (zh1), "#2");
 		}
 
-#if NET_4_5
 		CountdownEvent barrier = new CountdownEvent (3);
 		AutoResetEvent[] evt = new AutoResetEvent [] { new AutoResetEvent (false), new AutoResetEvent (false), new AutoResetEvent (false), new AutoResetEvent (false)};
 
@@ -743,6 +742,5 @@ namespace MonoTests.System.Globalization
 			Assert.AreEqual ("$100,000.00", us_str, "#1");
 			Assert.AreEqual ("R$ 100.000,00", br_str, "#2");
 		}
-#endif
 	}
 }

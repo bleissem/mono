@@ -37,6 +37,8 @@ using System.Security.AccessControl;
 using System.Security.Permissions;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
@@ -72,21 +74,33 @@ namespace System.IO.Pipes
 		}
 
 		public NamedPipeClientStream (string serverName, string pipeName, PipeDirection direction, PipeOptions options, TokenImpersonationLevel impersonationLevel, HandleInheritability inheritability)
+#if MOBILE
+			: base (direction, DefaultBufferSize)
+		{
+			throw new NotImplementedException ();
+		}
+#else
 			: this (serverName, pipeName, ToAccessRights (direction), options, impersonationLevel, inheritability)
 		{
 		}
+#endif
 
 		public NamedPipeClientStream (PipeDirection direction, bool isAsync, bool isConnected, SafePipeHandle safePipeHandle)
 			: base (direction, DefaultBufferSize)
 		{
+#if MOBILE
+			throw new NotImplementedException ();
+#else
 			if (IsWindows)
 				impl = new Win32NamedPipeClient (this, safePipeHandle);
 			else
 				impl = new UnixNamedPipeClient (this, safePipeHandle);
 			IsConnected = isConnected;
 			InitializeHandle (safePipeHandle, true, isAsync);
+#endif
 		}
 
+#if !MOBILE
 		public NamedPipeClientStream (string serverName, string pipeName, PipeAccessRights desiredAccessRights, PipeOptions options, TokenImpersonationLevel impersonationLevel, HandleInheritability inheritability)
 			: base (ToDirection (desiredAccessRights), DefaultBufferSize)
 		{
@@ -99,21 +113,54 @@ namespace System.IO.Pipes
 			else
 				impl = new UnixNamedPipeClient (this, serverName, pipeName, desiredAccessRights, options, inheritability);
 		}
+#endif
 
+		~NamedPipeClientStream () {
+			Dispose (false);
+		}
+		
 		INamedPipeClient impl;
 
 		public void Connect ()
 		{
+#if MOBILE
+			throw new NotImplementedException ();
+#else
 			impl.Connect ();
 			InitializeHandle (impl.Handle, false, impl.IsAsync);
 			IsConnected = true;
+#endif
 		}
 
 		public void Connect (int timeout)
 		{
+#if MOBILE
+			throw new NotImplementedException ();
+#else			
 			impl.Connect (timeout);
 			InitializeHandle (impl.Handle, false, impl.IsAsync);
 			IsConnected = true;
+#endif
+		}
+
+		public Task ConnectAsync ()
+		{
+			return ConnectAsync (Timeout.Infinite, CancellationToken.None);
+		}
+
+		public Task ConnectAsync (int timeout)
+		{
+			return ConnectAsync (timeout, CancellationToken.None);
+		}
+
+		public Task ConnectAsync (CancellationToken cancellationToken)
+		{
+			return ConnectAsync (Timeout.Infinite, cancellationToken);
+		}
+
+		public Task ConnectAsync (int timeout, CancellationToken cancellationToken)
+		{
+			throw new NotImplementedException ();
 		}
 
 		public int NumberOfServerInstances {

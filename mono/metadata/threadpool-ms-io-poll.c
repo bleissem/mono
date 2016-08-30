@@ -29,12 +29,6 @@ poll_init (gint wakeup_pipe_fd)
 }
 
 static void
-poll_cleanup (void)
-{
-	g_free (poll_fds);
-}
-
-static void
 poll_register_fd (gint fd, gint events, gboolean is_new)
 {
 	gint i;
@@ -74,7 +68,7 @@ poll_register_fd (gint fd, gint events, gboolean is_new)
 		poll_fds_capacity *= 2;
 		g_assert (poll_fds_size <= poll_fds_capacity);
 
-		poll_fds = g_renew (mono_pollfd, poll_fds, poll_fds_capacity);
+		poll_fds = (mono_pollfd *)g_renew (mono_pollfd, poll_fds, poll_fds_capacity);
 	}
 
 	POLL_INIT_FD (&poll_fds [poll_fds_size - 1], fd, poll_event);
@@ -149,7 +143,9 @@ poll_event_wait (void (*callback) (gint fd, gint events, gpointer user_data), gp
 
 	mono_gc_set_skip_thread (TRUE);
 
+	MONO_ENTER_GC_SAFE;
 	ready = mono_poll (poll_fds, poll_fds_size, -1);
+	MONO_EXIT_GC_SAFE;
 
 	mono_gc_set_skip_thread (FALSE);
 
@@ -236,7 +232,6 @@ poll_event_wait (void (*callback) (gint fd, gint events, gpointer user_data), gp
 
 static ThreadPoolIOBackend backend_poll = {
 	.init = poll_init,
-	.cleanup = poll_cleanup,
 	.register_fd = poll_register_fd,
 	.remove_fd = poll_remove_fd,
 	.event_wait = poll_event_wait,

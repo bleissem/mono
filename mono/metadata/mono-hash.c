@@ -30,8 +30,9 @@
 #include <math.h>
 #include <glib.h>
 #include "mono-hash.h"
-#include "metadata/gc-internal.h"
+#include "metadata/gc-internals.h"
 #include <mono/utils/checked-build.h>
+#include <mono/utils/mono-threads-coop.h>
 
 #ifdef HAVE_BOEHM_GC
 #define mg_new0(type,n)  ((type *) GC_MALLOC(sizeof(type) * (n)))
@@ -173,7 +174,7 @@ typedef struct {
 static void*
 do_rehash (void *_data)
 {
-	RehashData *data = _data;
+	RehashData *data = (RehashData *)_data;
 	MonoGHashTable *hash = data->hash;
 	int current_size, i;
 	Slot **table;
@@ -425,17 +426,17 @@ mono_g_hash_table_insert_replace (MonoGHashTable *hash, gpointer key, gpointer v
 			if (replace){
 				if (hash->key_destroy_func != NULL)
 					(*hash->key_destroy_func)(s->key);
-				s->key = key;
+				s->key = (MonoObject *)key;
 			}
 			if (hash->value_destroy_func != NULL)
 				(*hash->value_destroy_func) (s->value);
-			s->value = value;
+			s->value = (MonoObject *)value;
 			return;
 		}
 	}
 	s = new_slot (hash);
-	s->key = key;
-	s->value = value;
+	s->key = (MonoObject *)key;
+	s->value = (MonoObject *)value;
 	s->next = hash->table [hashcode];
 	hash->table [hashcode] = s;
 	hash->in_use++;

@@ -152,18 +152,18 @@ namespace Mono.Linker.Steps {
 				// at this stage reference might include things that can't be resolved
 				// and if it is (resolved) it needs to be kept only if marked (#16213)
 				if ((td != null) && Annotations.IsMarked (td)) {
-					scope = assembly.MainModule.Import (td).Scope;
+					scope = assembly.MainModule.ImportReference (td).Scope;
 					if (tr.Scope != scope)
 						changes = true;
+					hash.Add (tr, scope);
 				}
-				hash.Add (tr, scope);
 			}
 			if (assembly.MainModule.HasExportedTypes) {
 				foreach (var et in assembly.MainModule.ExportedTypes) {
 					var td = et.Resolve ();
 					IMetadataScope scope = et.Scope;
 					if ((td != null) && Annotations.IsMarked (td)) {
-						scope = assembly.MainModule.Import (td).Scope;
+						scope = assembly.MainModule.ImportReference (td).Scope;
 						hash.Add (td, scope);
 					}
 				}

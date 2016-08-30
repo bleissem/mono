@@ -2,6 +2,7 @@
  * Copyright 2003 Ximian, Inc
  * Copyright 2003-2011 Novell Inc
  * Copyright 2011 Xamarin Inc
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 MINI_OP(OP_LOAD,	"load", NONE, NONE, NONE)
 MINI_OP(OP_LDADDR,	"ldaddr", IREG, NONE, NONE)
@@ -41,6 +42,7 @@ MINI_OP(OP_SEQ_POINT, "seq_point", NONE, NONE, NONE)
 MINI_OP(OP_IL_SEQ_POINT, "il_seq_point", NONE, NONE, NONE)
 MINI_OP(OP_IMPLICIT_EXCEPTION, "implicit_exception", NONE, NONE, NONE)
 
+/* CALL opcodes need to stay together, see MONO_IS_CALL macro */
 MINI_OP(OP_VOIDCALL,	"voidcall", NONE, NONE, NONE)
 MINI_OP(OP_VOIDCALL_REG,	"voidcall_reg", NONE, IREG, NONE)
 MINI_OP(OP_VOIDCALL_MEMBASE,	"voidcall_membase", NONE, IREG, NONE)
@@ -371,7 +373,7 @@ MINI_OP(OP_INOT,       "int_not", IREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_I1,"int_conv_to_i1", IREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_I2,"int_conv_to_i2", IREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_I4,"int_conv_to_i4", IREG, IREG, NONE)
-MINI_OP(OP_ICONV_TO_I8,"int_conv_to_i8", IREG, IREG, NONE)
+MINI_OP(OP_ICONV_TO_I8,"int_conv_to_i8", LREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_R4,"int_conv_to_r4", FREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_R8,"int_conv_to_r8", FREG, IREG, NONE)
 MINI_OP(OP_ICONV_TO_U4,"int_conv_to_u4", IREG, IREG, NONE)
@@ -540,11 +542,11 @@ MINI_OP(OP_FSUB_OVF_UN,   "float_sub_ovf_un", FREG, FREG, FREG)
 MINI_OP(OP_FCONV_TO_OVF_I1_UN,"float_conv_to_ovf_i1_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I2_UN,"float_conv_to_ovf_i2_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I4_UN,"float_conv_to_ovf_i4_un", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_I8_UN,"float_conv_to_ovf_i8_un", IREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_I8_UN,"float_conv_to_ovf_i8_un", LREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U1_UN,"float_conv_to_ovf_u1_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U2_UN,"float_conv_to_ovf_u2_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U4_UN,"float_conv_to_ovf_u4_un", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_U8_UN,"float_conv_to_ovf_u8_un", IREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_U8_UN,"float_conv_to_ovf_u8_un", LREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I_UN, "float_conv_to_ovf_i_un", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U_UN, "float_conv_to_ovf_u_un", IREG, FREG, NONE)
 
@@ -554,8 +556,8 @@ MINI_OP(OP_FCONV_TO_OVF_I2,"float_conv_to_ovf_i2", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U2,"float_conv_to_ovf_u2", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_I4,"float_conv_to_ovf_i4", IREG, FREG, NONE)
 MINI_OP(OP_FCONV_TO_OVF_U4,"float_conv_to_ovf_u4", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_I8,"float_conv_to_ovf_i8", IREG, FREG, NONE)
-MINI_OP(OP_FCONV_TO_OVF_U8,"float_conv_to_ovf_u8", IREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_I8,"float_conv_to_ovf_i8", LREG, FREG, NONE)
+MINI_OP(OP_FCONV_TO_OVF_U8,"float_conv_to_ovf_u8", LREG, FREG, NONE)
 
 /* These do the comparison too */
 MINI_OP(OP_FCEQ,   "float_ceq", IREG, FREG, FREG)
@@ -704,6 +706,9 @@ MINI_OP(OP_STRLEN, "strlen", IREG, IREG, NONE)
 MINI_OP(OP_NEWARR, "newarr", IREG, IREG, NONE)
 MINI_OP(OP_LDLEN, "ldlen", IREG, IREG, NONE)
 MINI_OP(OP_BOUNDS_CHECK, "bounds_check", NONE, IREG, IREG)
+/* type checks */
+MINI_OP(OP_ISINST, "isinst", IREG, IREG, NONE)
+MINI_OP(OP_CASTCLASS, "castclass", IREG, IREG, NONE)
 /* get adress of element in a 2D array */
 MINI_OP(OP_LDELEMA2D, "getldelema2", NONE, NONE, NONE)
 /* inlined small memcpy with constant length */
@@ -1395,3 +1400,4 @@ MINI_OP(OP_OBJC_GET_SELECTOR, "objc_get_selector", IREG, NONE, NONE)
 MINI_OP(OP_GET_SP, "get_sp", IREG, NONE, NONE)
 MINI_OP(OP_SET_SP, "set_sp", NONE, IREG, NONE)
 
+MINI_OP(OP_GET_LAST_ERROR, "get_last_error", IREG, NONE, NONE)

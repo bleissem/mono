@@ -13,8 +13,25 @@ RESGEN := $(dir $(shell which $(EXTERNAL_MCS)))resgen2
 profile-check:
 	@:
 
-DEFAULT_REFERENCES = -r:mscorlib.dll
-PROFILE_MCS_FLAGS = -d:NET_1_1 -d:NET_2_0 -d:NET_2_1 -d:NET_3_5 -d:NET_4_0 -d:NET_4_5 -d:MONO -d:DISABLE_CAS_USE  -d:MOBILE,MOBILE_LEGACY -d:MONOTOUCH -D:DISABLE_REMOTING -d:DISABLE_COM -nowarn:1699 -nostdlib -lib:$(topdir)/class/lib/$(PROFILE) $(DEFAULT_REFERENCES) $(PLATFORM_DEBUG_FLAGS)
+DEFAULT_REFERENCES = -r:$(topdir)/class/lib/$(PROFILE)/mscorlib.dll
+PROFILE_MCS_FLAGS = \
+	-d:NET_1_1 \
+	-d:NET_2_0 \
+	-d:NET_2_1 \
+	-d:NET_3_5 \
+	-d:NET_4_0 \
+	-d:NET_4_5 \
+	-d:MOBILE,MOBILE_LEGACY \
+	-d:MONO \
+	-d:MONOTOUCH \
+	-d:DISABLE_REMOTING \
+	-d:DISABLE_COM \
+	-d:FEATURE_INTERCEPTABLE_THREADPOOL_CALLBACK \
+	-d:NETSTANDARD \
+	-nowarn:1699 \
+	-nostdlib \
+	$(DEFAULT_REFERENCES) \
+	$(PLATFORM_DEBUG_FLAGS)
 
 FRAMEWORK_VERSION = 2.1
 

@@ -116,6 +116,8 @@ namespace Mono.CSharp
 
 		public ExceptionStatement CurrentTryBlock { get; set; }
 
+		public TryCatch CurrentTryCatch { get; set; }
+
 		public LoopStatement EnclosingLoop { get; set; }
 
 		public LoopStatement EnclosingLoopOrSwitch { get; set; }
@@ -190,6 +192,8 @@ namespace Mono.CSharp
 			TryWithCatchScope = 1 << 15,
 
 			DontSetConditionalAccessReceiver = 1 << 16,
+
+			NameOfScope = 1 << 17,
 
 			///
 			/// Indicates the current context is in probing mode, no errors are reported. 

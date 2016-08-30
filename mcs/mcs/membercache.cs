@@ -465,7 +465,7 @@ namespace Mono.CSharp {
 		//
 		// Finds the nested type in container
 		//
-		public static TypeSpec FindNestedType (TypeSpec container, string name, int arity)
+		public static TypeSpec FindNestedType (TypeSpec container, string name, int arity, bool declaredOnlyClass)
 		{
 			IList<MemberSpec> applicable;
 			TypeSpec best_match = null;
@@ -494,7 +494,7 @@ namespace Mono.CSharp {
 						if (arity < 0) {
 							if (best_match == null) {
 								best_match = ts;
-							} else if (System.Math.Abs (ts.Arity + arity) < System.Math.Abs (ts.Arity + arity)) {
+							} else if (System.Math.Abs (ts.Arity + arity) < System.Math.Abs (best_match.Arity + arity)) {
 								best_match = ts;
 							}
 						}
@@ -502,7 +502,7 @@ namespace Mono.CSharp {
 				}
 
 				container = container.BaseType;
-			} while (container != null);
+			} while (container != null && !declaredOnlyClass);
 
 			return best_match;
 		}
@@ -641,6 +641,24 @@ namespace Mono.CSharp {
 			} while (container != null);
 
 			return ambig_candidate;
+		}
+
+		public static List<TypeSpec> GetDeclaredNestedTypes (TypeSpec container)
+		{
+			List<TypeSpec> found = null;
+			foreach (var entry in container.MemberCache.member_hash) {
+				foreach (var member in entry.Value) {
+					if ((member.Kind & MemberKind.NestedMask) == 0)
+						continue;
+
+					if (found == null)
+						found = new List<TypeSpec> ();
+
+					found.Add ((TypeSpec)member);
+				}
+			}
+
+			return found;
 		}
 
 		//
@@ -1322,7 +1340,7 @@ namespace Mono.CSharp {
 			if (a.DeclaringType.MemberDefinition != b.DeclaringType.MemberDefinition)
 				return mc_b;
 
-			if (mc_a.Location.File != mc_a.Location.File)
+			if (mc_a.Location.File != mc_b.Location.File)
 				return mc_b;
 
 			return mc_b.Location.Row > mc_a.Location.Row ? mc_b : mc_a;

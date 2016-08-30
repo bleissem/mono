@@ -10,12 +10,12 @@
 #ifndef _WAPI_PROCESSES_H_
 #define _WAPI_PROCESSES_H_
 
+#include <sys/types.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <glib.h>
 
-#include <mono/io-layer/handles.h>
 #include <mono/io-layer/access.h>
 #include <mono/io-layer/versioninfo.h>
 
@@ -107,13 +107,13 @@ typedef struct _WapiShellExecuteInfo WapiShellExecuteInfo;
 struct _WapiShellExecuteInfo
 {
 	guint32 cbSize;
-	WapiShellExecuteInfoFlags fMask;
+	gulong fMask;
 	gpointer hwnd;
 	const gunichar2 *lpVerb;
 	const gunichar2 *lpFile;
 	const gunichar2 *lpParameters;
 	const gunichar2 *lpDirectory;
-	WapiShellExecuteShowFlags nShow;
+	gulong nShow;
 	gpointer hInstApp;
 	gpointer lpIDList;
 	const gunichar2 *lpClass;

@@ -8,6 +8,7 @@ using NUnit.Framework;
 namespace MonoTests.System.Net.Sockets
 {
 	[TestFixture]
+	[Category ("RequiresBSDSockets")]
 	public class SocketAsyncTest
 	{
 		Socket serverSocket;
@@ -106,11 +107,11 @@ namespace MonoTests.System.Net.Sockets
 			bool res = clientSocket.SendAsync (e);
 			if (res) {
 				if (!m.WaitOne (1500))
-					throw new TimeoutException ();
+					Assert.Fail ("Timeout #1");
 			}
 
 			if (!mainEvent.WaitOne (1500))
-				throw new TimeoutException ();
+				Assert.Fail ("Timeout #2");
 			if (error != null)
 				throw error;
 
@@ -124,11 +125,11 @@ namespace MonoTests.System.Net.Sockets
 			res = clientSocket.SendAsync (e);
 			if (res) {
 				if (!m.WaitOne (1500))
-					throw new TimeoutException ();
+					Assert.Fail ("Timeout #3");
 			}
 
 			if (!mainEvent.WaitOne (1500))
-				throw new TimeoutException ();
+				Assert.Fail ("Timeout #4");
 			if (error != null)
 				throw error;
 		}
